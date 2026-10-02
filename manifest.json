@@ -1,0 +1,18 @@
+{
+  "id": "./index.html",
+  "name": "ShalomStream Studio",
+  "short_name": "Studio",
+  "description": "Creator studio for ShalomStream: upload, manage and track your content.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0c0f14",
+  "theme_color": "#0c0f14",
+  "categories": ["music", "entertainment", "productivity"],
+  "icons": [
+    { "src": "logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "logo-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "logo-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
