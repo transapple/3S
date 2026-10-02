@@ -690,6 +690,27 @@ img,svg,video,canvas,iframe{max-width:100%}
  .cs-nav button.post-btn svg{width:30px;height:30px}
 }
 </style>
+<style id="postfix">
+/* Content list: title row with three-dot menu */
+.cs-item .ci-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.cs-item .ci-top>div{min-width:0;flex:1}
+.cs-item .kebab-btn{width:36px;height:36px;flex:none;margin:-4px -4px 0 0;background:transparent;border-color:transparent}
+.cs-item .kebab-btn:hover,.cs-item .kebab-btn[aria-expanded=true]{background:var(--surface2);border-color:var(--line2)}
+.kebab-pop{position:fixed;right:auto;z-index:200;min-width:190px;box-shadow:0 14px 36px rgba(0,0,0,.35)}
+.kebab-pop button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--text);font:inherit;font-size:14.5px;padding:12px 14px;border-radius:var(--r-sm);cursor:pointer}
+.kebab-pop button:hover{background:var(--surface)}
+.kebab-pop .danger{color:var(--danger)}
+/* Post flows */
+.pp-seg{display:flex;width:100%;margin:0 0 18px}.pp-seg .seg-btn{flex:1}
+.pp-prev{margin-top:8px}.pp-prev audio,.pp-prev video{width:100%;border-radius:var(--r-sm);background:#000;max-height:220px}
+.pp-prev audio{background:none}.pp-prev small{display:block;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.pp-submit{width:100%;height:48px}
+.pp-done{text-align:center;padding:6px 0}
+.pp-check{width:64px;height:64px;border-radius:50%;background:color-mix(in srgb,#2fb67c 20%,transparent);color:#2fb67c;display:grid;place-items:center;margin:0 auto 14px}
+.pp-done h2{padding-right:0}.pp-done p{margin-bottom:16px;overflow-wrap:anywhere}
+.pp-link input{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line2);border-radius:var(--r-sm);padding:11px 13px;font:inherit;font-size:13px;margin-bottom:12px}
+.pp-done .btn-row{justify-content:center}.pp-more{margin-top:12px}
+</style>
 </head>
 <body>
 <div id="creatorRoot"><div class="empty">Loading…</div></div>
@@ -1459,39 +1480,120 @@ function editProfile(){
   try{const b={name:fd.get('name'),location:fd.get('location'),description:fd.get('description')};if(file&&file.size)b.avatar=await squareBlob(file,512);await api.post('/creators/me/profile',b);closeModal();toast('Profile saved');await loadCreator();loadAll()}
   catch(err){$('ferr').textContent=err.message;$('fsub').disabled=false;$('fsub').textContent='Save profile'}});
 }
-async function openUpload(){
- if(!creator){showAuth('login');return}
- let d={};try{d=await api.get('/creators/me/defaults')||{}}catch(_){}
- const saved=!!(d.artist||d.category||d.genre||d.album),CATS=['Worship','Gospel','Hymns','Choir','Sermon'],GEN=['','Worship','Praise','Gospel','Hymns','Choir','Contemporary','Afro gospel','Instrumental','Kids'];
- const opt=(A,v)=>A.map(x=>`<option value="${e(x)}"${x===v?' selected':''}>${e(x||'No genre')}</option>`).join('');
- const albums=[...new Set(songs.filter(s=>String(s.creatorId)===String(creator.id)&&s.album).map(s=>s.album).concat(d.album?[d.album]:[]))];
- showModal(`<h2>Publish content</h2><p>Share music or messages you own or have permission to publish. It goes live as soon as you publish.</p>
-<form id="uform" novalidate oninput="upSync()" onchange="upSync()">
-<div class="field"><label>Audio or video file</label><input name="file" type="file" required onchange="upPick(this)"></div>
-<div class="field"><label>Title</label><input name="title" required maxlength="160"></div>
-${coverField('upload')}
-<div class="up-saved" id="upSaved"${saved?'':' hidden'}><div><strong id="upWho"></strong><small id="upWhat"></small></div><button type="button" class="outline-btn" onclick="upEdit(true)">Change</button></div>
-<div id="upFields"${saved?' hidden':''}>
-<div class="field"><label id="upArtL">Artist or ministry</label><input name="artist" value="${e(d.artist||creator.name)}" maxlength="120"></div>
-<div class="field"><label>Category</label><select name="category">${opt(CATS,d.category||'Worship')}</select></div>
-<div id="upMusic"><div class="field"><label>Genre</label><select name="genre">${opt(GEN,d.genre||'')}</select></div>
-<div class="field"><label>Album or playlist</label><input name="album" list="albList" value="${e(d.album||'')}" maxlength="120" placeholder="Pick one you have or type a new name"><datalist id="albList">${albums.map(a=>`<option value="${e(a)}">`).join('')}</datalist></div></div>
-</div>
-<div class="field"><label>Description <em>(optional)</em></label><textarea name="description" rows="3"></textarea></div>
-<label class="check"><input type="checkbox" name="remember" checked> <span>Remember these details for my next upload.</span></label>
-<label class="check"><input type="checkbox" name="permission" required> <span>I own this content or have permission to publish it.</span></label>
-<div class="form-error" id="ferr" role="alert"></div><button class="gold-btn" type="submit" id="fsub">Publish</button></form>`);
- upSync();
- $('uform').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target;if(!f.checkValidity()){upEdit(true);f.reportValidity();return}
-  const fd=new FormData(f);fixFileType(fd,'file');const cv=fd.get('cover');if(cv&&cv.size>15*1024*1024){$('ferr').textContent='Choose a cover image under 15 MB.';return}
-  if(f.category.value==='Sermon'){fd.set('genre','');fd.set('album','')}
-  $('ferr').textContent='';$('fsub').disabled=true;$('fsub').textContent='Publishing…';
-  try{const fl=fd.get('file'),pc=await pickedCover(fd,!!(fl&&/^video\//.test(fl.type)),900,900);fd.delete('coverPreset');if(pc&&pc!==cv)fd.set('cover',pc,'cover.jpg');
-   await api.post('/content',fd);closeModal();toast('Published');loadCreator();loadAll()}
-  catch(err){$('ferr').textContent=err.message;$('fsub').disabled=false;$('fsub').textContent='Publish'}});
-}
+function openUpload(){if(!creator){showAuth('login');return}closeModal();setTab('post')}
 function upSync(){const f=$('uform');if(!f)return;const c=f.category.value,m=c!=='Sermon';$('upMusic').hidden=!m;$('upArtL').textContent=m?'Artist or ministry':'Speaker';$('upWho').textContent=f.artist.value||creator.name;$('upWhat').textContent=[c].concat(m?[f.genre.value,f.album.value]:[]).filter(Boolean).join(', ')}
 function upEdit(on){$('upSaved').hidden=on;$('upFields').hidden=!on}
+const DOTS_V='<circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>';
+/* ===== POST FLOWS: music, message, video (file or link) + success screen ===== */
+const PK={
+ music:{title:'Upload music',text:'Songs, albums and hymns. Choose an audio file and publish it to your audience.',accept:'audio/*',fileL:'Audio file',fileHint:'MP3, M4A, WAV, AAC or OGG, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir'],artL:'Artist or ministry',want:'audio',noun:'song'},
+ message:{title:'Upload a message',text:'Sermons, teachings and testimonies. Upload an audio or video recording.',accept:'audio/*,video/*',fileL:'Audio or video file',fileHint:'MP3, M4A, WAV, MP4 or WebM, up to 50 MB.',cats:null,artL:'Speaker',want:'any',noun:'message'},
+ video:{title:'Upload a video',text:'Video files you own or may share.',accept:'video/*',fileL:'Video file',fileHint:'MP4, WebM, MOV or 3GP, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir','Sermon'],artL:'Church or ministry',want:'video',noun:'video'}
+};
+const PK_ICON={music:NOTE,message:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>',video:'<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>'};
+let ppDefaults=null,ppBusy=false;
+function ppSwitch(kind,mode){
+ const f=$('ppform'),keep=f?{title:f.title.value,description:f.description?f.description.value:''}:{};
+ openPost(kind,mode,keep);
+}
+async function openPost(kind,mode,keep){
+ if(!creator){showAuth('login');return}
+ const K=PK[kind];if(!K)return;mode=mode||'file';keep=keep||{};
+ if(ppDefaults===null){try{ppDefaults=await api.get('/creators/me/defaults')||{}}catch(_){ppDefaults={}}}
+ const d=ppDefaults||{},isMusic=kind==='music',isLink=mode==='link';
+ const opt=(A,v)=>A.map(x=>`<option value="${e(x)}"${x===v?' selected':''}>${e(x||'No genre')}</option>`).join('');
+ const GEN=['','Worship','Praise','Gospel','Hymns','Choir','Contemporary','Afro gospel','Instrumental','Kids'];
+ const albums=isMusic?[...new Set(songs.filter(s=>String(s.creatorId)===String(creator.id)&&s.album).map(s=>s.album).concat(d.album?[d.album]:[]))]:[];
+ const seg=`<div class="seg pp-seg" role="group" aria-label="How to post"><button type="button" class="seg-btn${isLink?'':' active'}" onclick="ppSwitch('${kind}','file')">Upload a file</button><button type="button" class="seg-btn${isLink?' active':''}" onclick="ppSwitch('${kind}','link')">Paste a link</button></div>`;
+ let body;
+ if(isLink){
+  body=`<div class="field"><label>Link</label><input name="url" type="url" required inputmode="url" placeholder="https://youtube.com/watch?v=…"><small class="gate-hint">YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch, Google Drive or a direct video file link. Links play as videos on ShalomStream.</small></div>
+<div class="field"><label>Title</label><input name="title" required maxlength="160" value="${e(keep.title||'')}"></div>
+<div class="field"><label>${kind==='message'?'Speaker, church or ministry':'Church, ministry or artist'}</label><input name="channel" maxlength="120" value="${e(d.artist||creator.name)}"></div>
+<div class="field"><label>This link is a</label><select name="kind"><option>Video</option><option>Live stream</option></select></div>
+${coverField('link')}`;
+ }else{
+  body=`<div class="field"><label>${K.fileL}</label><input name="file" type="file" required accept="${K.accept}" onchange="ppPick(this,'${kind}')"><small class="gate-hint">${K.fileHint}</small><div id="ppPrev" class="pp-prev" hidden></div></div>
+<div class="field"><label>Title</label><input name="title" required maxlength="160" value="${e(keep.title||'')}"></div>
+${coverField(kind==='video'?'link':'upload')}
+<div class="field"><label>${K.artL}</label><input name="artist" maxlength="120" value="${e(d.artist||creator.name)}"></div>
+${K.cats?`<div class="field"><label>Category</label><select name="category">${opt(K.cats,K.cats.includes(d.category)?d.category:K.cats[0])}</select></div>`:''}
+${isMusic?`<div class="field"><label>Genre <em>(optional)</em></label><select name="genre">${opt(GEN,d.genre||'')}</select></div><div class="field"><label>Album or playlist <em>(optional)</em></label><input name="album" list="albList" value="${e(d.album||'')}" maxlength="120" placeholder="Pick one you have or type a new name"><datalist id="albList">${albums.map(a=>`<option value="${e(a)}">`).join('')}</datalist></div>`:''}`;
+ }
+ body+=`<div class="field"><label>Description <em>(optional)</em></label><textarea name="description" rows="3" maxlength="2000">${e(keep.description||'')}</textarea></div>
+<label class="check"><input type="checkbox" name="permission" required> <span>I own this content or have permission to publish it.</span></label>
+<div class="form-error" id="ferr" role="alert"></div><button class="gold-btn pp-submit" type="submit" id="fsub">${isLink?'Add to ShalomStream':'Publish '+K.noun}</button>`;
+ showModal(`<h2>${K.title}</h2><p>${K.text}</p>${seg}<form id="ppform" novalidate>${body}</form>`);
+ $('ppform').addEventListener('submit',ev=>{ev.preventDefault();ppSubmit(kind,isLink)});
+}
+function ppPick(inp,kind){
+ const f=inp.files&&inp.files[0],er=$('ferr'),pv=$('ppPrev');if(er)er.textContent='';if(pv){pv.hidden=true;pv.innerHTML=''}
+ if(!f)return;
+ const t=f.type||EXT_MIME[(f.name.split('.').pop()||'').toLowerCase()]||'',K=PK[kind];
+ const bad=!/^(audio|video)\//.test(t)||(K.want==='audio'&&!/^audio\//.test(t))||(K.want==='video'&&!/^video\//.test(t));
+ if(bad){if(er)er.textContent=K.want==='audio'?'Choose an audio file, such as MP3, M4A, WAV or AAC. For a video, use Upload a video.':K.want==='video'?'Choose a video file, such as MP4, WebM or MOV. For audio, use Upload music or Upload a message.':'Choose an audio or video file, such as MP3, M4A, WAV, MP4 or WebM.';inp.value='';return}
+ if(f.size>MAX_UPLOAD){if(er)er.textContent='That file is too large. The limit is 50 MB.';inp.value='';return}
+ const form=inp.closest('form');if(form&&!form.title.value.trim())form.title.value=f.name.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim().slice(0,160);
+ if(pv){const url=URL.createObjectURL(f),isV=/^video\//.test(t);pv.innerHTML=`<${isV?'video':'audio'} controls preload="metadata" src="${url}"></${isV?'video':'audio'}><small>${e(f.name)} · ${(f.size/1048576).toFixed(1)} MB</small>`;pv.hidden=false}
+}
+async function ppSubmit(kind,isLink){
+ if(ppBusy)return;const f=$('ppform');if(!f.checkValidity()){f.reportValidity();return}
+ const er=$('ferr'),btn=$('fsub'),label=btn.textContent,K=PK[kind];er.textContent='';
+ const fd=new FormData(f),title=String(fd.get('title')||'').trim();
+ if(!title){er.textContent='Enter a title.';return}
+ ppBusy=true;btn.disabled=true;btn.textContent=isLink?'Adding…':'Uploading… keep this open';
+ try{
+  if(isLink){
+   const d=Object.fromEntries(fd),cvf=fd.get('cover');
+   if(cvf&&cvf.size>15*1024*1024)throw new Error('Choose a cover image under 15 MB.');
+   d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.title=title;d.kind=d.kind==='Live stream'?'live':'video';
+   const x=parseUrl(d.url);const ok=x&&x.protocol==='https:'&&(toEmbed(d.url)||/(^|\.)(youtube\.com|youtu\.be|facebook\.com|fb\.watch)$/.test(x.hostname));
+   if(!ok)throw new Error('Paste an https link from YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch or Google Drive, or a direct video file link.');
+   await api.post('/content/links',d);
+  }else{
+   fixFileType(fd,'file');const fl=fd.get('file'),cv=fd.get('cover');
+   if(!fl||!fl.size)throw new Error('Choose a file to upload.');
+   if(cv&&cv.size>15*1024*1024)throw new Error('Choose a cover image under 15 MB.');
+   if(kind==='message'){fd.set('category','Sermon');fd.set('genre','');fd.set('album','')}
+   else if(kind==='video'){fd.set('genre','');fd.set('album','')}
+   if(f.category&&f.category.value==='Sermon'&&kind!=='message'){fd.set('genre','');fd.set('album','')}
+   if(kind==='music')fd.set('remember','on');else fd.delete('remember');
+   const pc=await pickedCover(fd,/^video\//.test(fl.type),900,900);fd.delete('coverPreset');if(pc&&pc!==cv)fd.set('cover',pc,'cover.jpg');
+   await api.post('/content',fd);
+   if(kind==='music'){try{ppDefaults=Object.assign({},ppDefaults,{artist:String(fd.get('artist')||''),category:String(fd.get('category')||''),genre:String(fd.get('genre')||''),album:String(fd.get('album')||'')})}catch(_){}}
+  }
+  await refreshCreator();
+  const item=(cContent||[]).filter(c=>c.title===title).pop()||(cContent||[]).find(c=>c.title===title);
+  ppDone(kind,title,item,isLink);
+ }catch(err){
+  if(err&&err.status===401){closeModal();showAuth('login');toast('Sign in to continue');}
+  else{er.textContent=err.message||'That could not be published. Please try again.';btn.disabled=false;btn.textContent=label}
+ }finally{ppBusy=false}
+}
+function ppDone(kind,title,item,isLink){
+ const id=item&&!String(item.id).startsWith('offline-')?String(item.id):'';
+ const url=id?contentUrl(id):'';
+ showModal(`<div class="pp-done"><div class="pp-check">${ic('<path d="M5 12.5l4.5 4.5L19 7.5"/>',34,2.6)}</div><h2>${id?'Published':'Saved'}</h2><p><strong>${e(title)}</strong> ${id?'is live on ShalomStream.':'will be sent automatically when you are back online.'}</p>${url?`<div class="pp-link"><input readonly value="${e(url)}" onfocus="this.select()" aria-label="Share link"></div><div class="btn-row"><button class="gold-btn" onclick="ppCopy('${e(id)}')">Copy link</button><button class="outline-btn" onclick="shareItem('${e(id)}')">Share</button></div>`:''}<div class="btn-row pp-more"><button class="outline-btn" onclick="closeModal();setTab('content')">View in Content</button><button class="outline-btn" onclick="openPost('${kind}','${isLink?'link':'file'}')">Post another</button></div></div>`);
+}
+async function ppCopy(id){const u=contentUrl(id);try{await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){const i=document.querySelector('.pp-link input');if(i){i.select();try{document.execCommand('copy');toast('Link copied')}catch(__){toast('Press and hold the link to copy it')}}}}
+
+/* ===== Content list: three-dot menu ===== */
+function closeKebab(){const m=$('kebabPop');if(m)m.remove();document.querySelectorAll('.kebab-btn[aria-expanded=true]').forEach(b=>b.setAttribute('aria-expanded','false'))}
+function openKebab(id,btn){
+ const had=btn.getAttribute('aria-expanded')==='true';closeKebab();if(had)return;
+ btn.setAttribute('aria-expanded','true');
+ const m=document.createElement('div');m.id='kebabPop';m.className='kebab-menu kebab-pop';m.setAttribute('role','menu');
+ const eid=e(id),it=(fn,l,cls)=>`<button role="menuitem" class="${cls||''}" onclick="closeKebab();${fn}('${eid}')">${l}</button>`;
+ m.innerHTML=it('shareItem','Share link')+it('openCover','Change cover')+it('editItem','Edit details')+'<div class="kebab-sep"></div>'+it('delItem','Delete','danger');
+ document.body.appendChild(m);
+ const r=btn.getBoundingClientRect(),h=m.offsetHeight,w=m.offsetWidth;
+ let top=r.bottom+6;if(top+h>innerHeight-86)top=Math.max(8,r.top-h-6);
+ m.style.top=top+'px';m.style.left=Math.max(8,Math.min(innerWidth-w-8,r.right-w))+'px';
+}
+document.addEventListener('click',ev=>{if(!ev.target.closest('.kebab-pop')&&!ev.target.closest('.kebab-btn'))closeKebab()});
+addEventListener('scroll',closeKebab,{passive:true});addEventListener('resize',closeKebab);
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeKebab()});
+
 function showPage(){}function openVideo(){}
 
 /* ===== More menu: primary tabs on the bar, the rest in a sheet ===== */
@@ -1532,6 +1634,7 @@ const TABS=[['overview','Overview','<path d="M3 12l9-8 9 8M5 10v10h14V10"/>'],['
 const PER=[['7d','7 days'],['30d','30 days'],['90d','90 days']],MET=[['views','Views'],['plays','Plays'],['likes','Likes'],['followers','New followers']];
 const PUBLIC_SITE='https://transapple.github.io/3S/';/* the real listener site: share links open creators here */
 const pubUrl=()=>PUBLIC_SITE.replace(/\/?$/,'/')+'#creator='+creator.id;/* https link: opens the app if installed, otherwise the browser */
+const contentUrl=id=>PUBLIC_SITE.replace(/\/?$/,'/')+'#content='+encodeURIComponent(id);
 const kindOf=()=>(CTYPES.find(t=>t[0]===creator.type)||[0,'Creator'])[1];
 const nPending=()=>((cFeed&&cFeed.recent)||[]).length;
 const seg=(list,cur,fn)=>list.map(([k,l])=>`<button class="seg-btn${k===cur?' active':''}" onclick="${fn}('${k}')">${l}</button>`).join('');
@@ -1557,8 +1660,8 @@ function lists(){
  const boom=cContent.filter(c=>c.growth>=15).sort((a,b)=>b.growth-a.growth).slice(0,20),top=[...cContent].sort((a,b)=>b.plays-a.plays).slice(0,20),max=top[0]?Math.max(top[0].plays,1):1;
  return `<div class="c-split">${card('Trending now',boom.length?'<div class="c-scroll">'+boom.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span class="badge${c.growth>=50?' hot':''}">${c.growth>=50?'Booming':'Trending'}</span>${pct(c.growth)}</div>`).join('')+'</div>':'<p class="c-empty">Nothing is trending yet. Publish more and check back.</p>')}${card('Most played',top.length?'<div class="c-scroll">'+top.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><i class="meter"><b style="width:${Math.round(c.plays/max*100)}%"></b></i></div><span>${fmtN(c.plays)}</span></div>`).join('')+'</div>':'<p class="c-empty">Plays will show here.</p>')}</div>`;
 }
-function head(){
- return `<div class="dash-head"><div class="dash-top"><div class="dash-id">${av(creator.avatar_url,creator.name,'lg')}<div class="dash-info"><h2>${e(creator.name)}</h2><p>${e(kindOf())}${creator.location?', '+e(creator.location):''}</p><span class="badge">${creator.verified?'Verified':'Awaiting verification'}</span>${creator.description?`<p class="dash-about">${e(creator.description)}</p>`:''}</div></div></div><div class="btn-row dash-actions"><button class="gold-btn" onclick="openModal('upload')">Upload content</button><button class="outline-btn" onclick="openModal('link')">Add stream or video link</button><button class="outline-btn" onclick="editProfile()">Edit profile</button></div></div>`;
+function head(actions){
+ return `<div class="dash-head"><div class="dash-top"><div class="dash-id">${av(creator.avatar_url,creator.name,'lg')}<div class="dash-info"><h2>${e(creator.name)}</h2><p>${e(kindOf())}${creator.location?', '+e(creator.location):''}</p><span class="badge">${creator.verified?'Verified':'Awaiting verification'}</span>${creator.description?`<p class="dash-about">${e(creator.description)}</p>`:''}</div></div></div>${actions?`<div class="btn-row dash-actions"><button class="gold-btn" onclick="setTab('post')">Upload content</button><button class="outline-btn" onclick="openPost('video','link')">Add stream or video link</button><button class="outline-btn" onclick="editProfile()">Edit profile</button></div>`:''}</div>`;
 }
 function todo(){
  const p=nPending(),it=[];
@@ -1573,15 +1676,15 @@ function vOverview(){
 function rows(){
  const q=cQ.toLowerCase(),PC=(cFeed&&cFeed.per_content)||{};
  const L=cContent.filter(c=>(cType==='all'||c.type===cType)&&(!q||String(c.title).toLowerCase().includes(q))).sort((a,b)=>cSort==='title'?String(a.title).localeCompare(b.title):(b[cSort]||0)-(a[cSort]||0));
- return L.length?L.map(c=>`<div class="cs-item"><div><h4>${e(c.title)}</h4><div class="m"><span>${e(c.type)}</span><span>${e(c.status)}</span>${PC[c.id]?`<span>${fmtN(PC[c.id])} comment${PC[c.id]==1?'':'s'}</span>`:''}</div></div><div class="m"><span>${fmtN(c.plays)} plays</span><span>${fmtN(c.views)} views</span><span>${fmtN(c.likes||0)} likes</span><span>${fmtN(c.watching||0)} watching</span>${pct(c.growth||0)}</div><div class="a">${String(c.id).startsWith('offline-')?'<span class="m pend">Waiting to send. It goes out automatically when you are online.</span>':`<button onclick="openCover('${e(c.id)}')">Change cover</button><button onclick="editItem('${e(c.id)}')">Edit details</button><button class="del" onclick="delItem('${e(c.id)}')">Delete</button>`}</div></div>`).join(''):'<p class="c-empty">No content matches.</p>';
+ return L.length?L.map(c=>`<div class="cs-item"><div class="ci-top"><div><h4>${e(c.title)}</h4><div class="m"><span>${e(c.type)}</span><span>${e(c.status)}</span>${PC[c.id]?`<span>${fmtN(PC[c.id])} comment${PC[c.id]==1?'':'s'}</span>`:''}</div></div>${String(c.id).startsWith('offline-')?'':`<button type="button" class="kebab-btn" aria-label="More options for ${e(c.title)}" aria-haspopup="menu" aria-expanded="false" onclick="openKebab('${e(c.id)}',this)">${ic(DOTS_V,20)}</button>`}</div><div class="m"><span>${fmtN(c.plays)} plays</span><span>${fmtN(c.views)} views</span><span>${fmtN(c.likes||0)} likes</span><span>${fmtN(c.watching||0)} watching</span>${pct(c.growth||0)}</div>${String(c.id).startsWith('offline-')?'<div class="a"><span class="m pend">Waiting to send. It goes out automatically when you are online.</span></div>':''}</div>`).join(''):'<p class="c-empty">No content matches.</p>';
 }
 function vContent(){
  const types=[...new Set(cContent.map(c=>c.type))],R="$('clist').innerHTML=rows()";
- return title('Content',cContent.length+' item'+(cContent.length==1?'':'s')+' published')+`<div class="cs-tools"><input type="search" placeholder="Search your content" aria-label="Search" value="${e(cQ)}" oninput="cQ=this.value;${R}"><select aria-label="Type" onchange="cType=this.value;${R}"><option value="all">All types</option>${types.map(t=>`<option${t===cType?' selected':''}>${e(t)}</option>`).join('')}</select><select aria-label="Sort" onchange="cSort=this.value;${R}">${[['plays','Most played'],['views','Most viewed'],['likes','Most liked'],['growth','Fastest growing'],['title','A to Z']].map(([k,l])=>`<option value="${k}"${k===cSort?' selected':''}>${l}</option>`).join('')}</select><button class="outline-btn" onclick="exportCSV('content')">Export CSV</button><button class="gold-btn" onclick="openModal('upload')">Upload</button></div>`+card('All content',`<div id="clist">${rows()}</div>`);
+ return title('Content',cContent.length+' item'+(cContent.length==1?'':'s')+' published')+`<div class="cs-tools"><input type="search" placeholder="Search your content" aria-label="Search" value="${e(cQ)}" oninput="cQ=this.value;${R}"><select aria-label="Type" onchange="cType=this.value;${R}"><option value="all">All types</option>${types.map(t=>`<option${t===cType?' selected':''}>${e(t)}</option>`).join('')}</select><select aria-label="Sort" onchange="cSort=this.value;${R}">${[['plays','Most played'],['views','Most viewed'],['likes','Most liked'],['growth','Fastest growing'],['title','A to Z']].map(([k,l])=>`<option value="${k}"${k===cSort?' selected':''}>${l}</option>`).join('')}</select><button class="outline-btn" onclick="exportCSV('content')">Export CSV</button><button class="gold-btn" onclick="setTab('post')">Upload</button></div>`+card('All content',`<div id="clist">${rows()}</div>`);
 }
 function vPost(){
  const rec=cContent.slice(0,6);
- return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Upload music','Songs, albums and hymns from an audio file',"openModal('upload')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Upload a message','Sermons, teachings and testimonies',"openModal('upload')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Upload a video','Video files you own or may share',"openModal('upload')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Add a link or live stream','YouTube, Facebook, Vimeo, Twitch and more',"openModal('link')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
+ return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Upload music','Songs, albums and hymns from an audio file',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Upload a message','Sermons, teachings and testimonies',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Upload a video','Video files you own or may share',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Add a link or live stream','YouTube, Facebook, Vimeo, Twitch and more',"openPost('video','link')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
 }
 function vAudience(){
  const T=(cData&&cData.totals)||{},C=(cData&&cData.changes)||{};
@@ -1592,7 +1695,7 @@ function vAnalytics(){
  return title('Analytics','See how your content performs over time.')+perBar()+stats()+`<div class="cs-grid2">${MET.map(([k,l])=>card(l,lineChart(k))).join('')}</div><div style="height:16px"></div>`+card('Daily breakdown <button class="outline-btn" style="float:right;height:34px" onclick="exportCSV(\'daily\')">Export CSV</button>',s.length?`<div class="c-scroll"><table class="cs-days"><tr><th>Date</th><th>Views</th><th>Plays</th><th>Likes</th><th>New followers</th></tr>${s.map(x=>`<tr><td>${e(x.date)}</td><td>${fmtN(x.views||0)}</td><td>${fmtN(x.plays||0)}</td><td>${fmtN(x.likes||0)}</td><td>${fmtN(x.followers||0)}</td></tr>`).join('')}</table></div>`:'<p class="c-empty">No data yet.</p>')+lists();
 }
 function vProfile(){
- return title('Profile','How listeners see you on ShalomStream.')+head()+`<div class="cs-grid2">${card('Profile details',kv('Name',e(creator.name))+kv('Type',e(kindOf()))+kv('Location',e(creator.location))+kv('About',e(creator.description))+kv('Status',creator.verified?'Verified':'Awaiting verification'))}${card('Account and sharing',kv('Sign-in email',e(user&&user.email))+kv('Public page',`<a class="lnk" href="${e(pubUrl())}" target="_blank" rel="noopener">${e(pubUrl())}</a>`)+`<div class="btn-row" style="margin-top:14px"><button class="gold-btn" onclick="editProfile()">Edit profile</button><button class="outline-btn" onclick="copyPub()">Copy link</button><button class="outline-btn" onclick="sharePub()">Share</button></div>`)}</div>`;
+ return title('Profile','How listeners see you on ShalomStream.')+head(true)+`<div class="cs-grid2">${card('Profile details',kv('Name',e(creator.name))+kv('Type',e(kindOf()))+kv('Location',e(creator.location))+kv('About',e(creator.description))+kv('Status',creator.verified?'Verified':'Awaiting verification'))}${card('Account and sharing',kv('Sign-in email',e(user&&user.email))+kv('Public page',`<a class="lnk" href="${e(pubUrl())}" target="_blank" rel="noopener">${e(pubUrl())}</a>`)+`<div class="btn-row" style="margin-top:14px"><button class="gold-btn" onclick="editProfile()">Edit profile</button><button class="outline-btn" onclick="copyPub()">Copy link</button><button class="outline-btn" onclick="sharePub()">Share</button></div>`)}</div>`;
 }
 function vSettings(){
  return title('Settings','Appearance, security and help.')+`<div class="cs-grid2">${lookCard()}${offlineCard()}${card('Appearance','<div class="seg" role="group" aria-label="Theme"><button type="button" class="seg-btn" data-th="light" onclick="setThemeMode(\'light\')">Day</button><button type="button" class="seg-btn" data-th="dark" onclick="setThemeMode(\'dark\')">Night</button></div>')}${card('Change password','<form class="au-form" onsubmit="newPw(event)"><div class="au-field"><label>New password</label><input type="password" name="pw" minlength="6" maxlength="72" required autocomplete="new-password"></div><div class="form-error" id="pwErr" role="alert"></div><button class="gold-btn" type="submit">Update password</button></form>')}${card('Help','<p class="c-empty">Send a complaint, question or appeal to the admin and read their replies here.</p><div class="btn-row"><button class="gold-btn" onclick="openSupport()">Contact admin</button></div>')}${card('Session','<div class="btn-row"><button class="outline-btn" onclick="refreshCreator().then(()=>toast(\'Data refreshed\'))">Refresh data</button><button class="outline-btn" onclick="signOut()">Sign out</button></div>')}</div>`;
@@ -1614,6 +1717,7 @@ function exportCSV(w){
  else saveCSV('daily-'+cPeriod+'.csv',[['Date','Views','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
 }
 function copyPub(){try{navigator.clipboard.writeText(pubUrl()).then(()=>toast('Profile link copied'),()=>toast('Could not copy the link'))}catch(_){toast('Could not copy the link')}}
+async function shareItem(id){const c=(cContent||[]).find(x=>String(x.id)===String(id)),u=contentUrl(id);try{if(navigator.share){await navigator.share({title:((c&&c.title)||'Content')+' on ShalomStream',url:u});return}await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){}}
 async function sharePub(){try{if(navigator.share){await navigator.share({title:creator.name+' on ShalomStream',url:pubUrl()});return}}catch(_){return}copyPub()}
 async function newPw(ev){ev.preventDefault();const f=ev.target;try{const r=await sb.auth.updateUser({password:f.pw.value});if(r.error)throw r.error;f.reset();toast('Password updated')}catch(er){$('pwErr').textContent=er.message||'Could not update the password.'}}
 async function editItem(id){
