@@ -1635,9 +1635,10 @@ let tab='overview';try{const t0=localStorage.getItem('ss-tab');if(t0)tab=t0}catc
 const TABS=[['overview','Overview','<path d="M3 12l9-8 9 8M5 10v10h14V10"/>'],['content','Content',NOTE],['post','Post','<path d="M12 5v14M5 12h14"/>'],['audience','Audience','<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>'],['analytics','Analytics','<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],['profile','Profile','<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'],['settings','Settings','<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>']];
 const PER=[['7d','7 days'],['30d','30 days'],['90d','90 days']],MET=[['views','Views'],['plays','Plays'],['likes','Likes'],['followers','New followers']];
 const PUBLIC_SITE='https://transapple.github.io/Shalom-Stream/';/* the real listener site: share links open creators here */
-const pubUrl=()=>PUBLIC_SITE.replace(/\/?$/,'/')+'#creator='+creator.id;/* https link: opens the app if installed, otherwise the browser */
+const SHARE_BASE='';/* PASTE your deployed share-worker URL here (no trailing slash), e.g. https://shalom-share.yourname.workers.dev. Empty = old #links (no rich preview) */
+const pubUrl=()=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/u/'+encodeURIComponent(creator.id):PUBLIC_SITE.replace(/\/?$/,'/')+'#creator='+creator.id;/* https link: opens the app if installed, otherwise the browser */
 const slugOf=n=>String(n||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9._]+/g,'-').replace(/^-+|-+$/g,'')||'creator';
-const contentUrl=id=>PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
+const contentUrl=id=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/c/'+encodeURIComponent(id):PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
 const kindOf=()=>(CTYPES.find(t=>t[0]===creator.type)||[0,'Creator'])[1];
 const nPending=()=>((cFeed&&cFeed.recent)||[]).length;
 const seg=(list,cur,fn)=>list.map(([k,l])=>`<button class="seg-btn${k===cur?' active':''}" onclick="${fn}('${k}')">${l}</button>`).join('');
@@ -1720,8 +1721,8 @@ function exportCSV(w){
  else saveCSV('daily-'+cPeriod+'.csv',[['Date','Views','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
 }
 function copyPub(){try{navigator.clipboard.writeText(pubUrl()).then(()=>toast('Profile link copied'),()=>toast('Could not copy the link'))}catch(_){toast('Could not copy the link')}}
-async function shareItem(id){const c=(cContent||[]).find(x=>String(x.id)===String(id)),u=contentUrl(id);try{if(navigator.share){await navigator.share({title:((c&&c.title)||'Content')+' on ShalomStream',url:u});return}await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){}}
-async function sharePub(){try{if(navigator.share){await navigator.share({title:creator.name+' on ShalomStream',url:pubUrl()});return}}catch(_){return}copyPub()}
+async function shareItem(id){const c=(cContent||[]).find(x=>String(x.id)===String(id)),u=contentUrl(id);try{if(navigator.share){await navigator.share({title:((c&&c.title)||'Content')+' on ShalomStream',text:((c&&c.title)||'Content')+' · Content from Shalom Stream',url:u});return}await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){}}
+async function sharePub(){try{if(navigator.share){await navigator.share({title:creator.name+' on ShalomStream',text:creator.name+' · Creator on Shalom Stream',url:pubUrl()});return}}catch(_){return}copyPub()}
 async function newPw(ev){ev.preventDefault();const f=ev.target;try{const r=await sb.auth.updateUser({password:f.pw.value});if(r.error)throw r.error;f.reset();toast('Password updated')}catch(er){$('pwErr').textContent=er.message||'Could not update the password.'}}
 async function editItem(id){
  const r=await sb.from('content').select('title,description').eq('id',id).maybeSingle(),c=r.data||{};
