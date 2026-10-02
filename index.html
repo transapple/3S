@@ -653,7 +653,14 @@ img,svg,video,canvas,iframe{max-width:100%}
 .c-scroll,.c-table,.modal,.pl-list{max-width:100%}.c-scroll{overflow-x:auto}
 .cs-days{min-width:420px}
 .modal{overflow-x:auto}.modal input,.modal select,.modal textarea{max-width:100%}
+.pop-back{position:fixed;inset:0;z-index:90;background:transparent}
+.pop-menu{position:fixed;min-width:220px;max-width:calc(100vw - 16px);background:var(--surface);border:1px solid var(--line2);border-radius:14px;box-shadow:0 14px 36px rgba(0,0,0,.35);padding:6px;display:grid;gap:2px}
+.pop-menu button{display:flex;align-items:center;gap:12px;width:100%;height:46px;padding:0 12px;border:0;border-radius:10px;background:transparent;color:var(--text);font-weight:600;font-size:15px;text-align:left}
+.pop-menu button:hover,.pop-menu button:active{background:var(--surface2)}
+.pop-menu button.on{color:var(--gold)}
+.pop-menu svg{flex:none;color:var(--muted)}.pop-menu button.on svg{color:var(--gold)}
 .more-btn{display:none}
+.dash-top{position:relative}.card-dots{position:absolute;top:0;right:0;z-index:2}.dash-top .dash-info{padding-right:36px}.cs-dots{border-color:transparent}.cs-dots:hover{background:var(--surface2);border-color:var(--line2)}
 .sheet{position:fixed;inset:0;z-index:90;background:rgba(5,7,10,.7);display:flex;align-items:flex-end;justify-content:center}
 .sheet-panel{width:min(520px,100%);max-height:85%;overflow-y:auto;background:var(--surface);border:1px solid var(--line2);border-radius:var(--r-lg) var(--r-lg) 0 0;padding:10px 16px calc(18px + env(safe-area-inset-bottom))}
 .sheet-grab{width:40px;height:4px;border-radius:4px;background:var(--line2);margin:0 auto 14px}
@@ -993,7 +1000,7 @@ const ok=r=>{if(r&&r.error)throw r.error;return r?r.data:null};
 async function sessionUser(){let r=null;try{r=await sb.auth.getSession()}catch(_){}const s=r&&r.data&&r.data.session;if(s)return s.user;const er=r&&r.error;if(!navigator.onLine||(er&&/retryable|fetch|network/i.test(String(er.name||'')+String(er.message||''))))return window.ssOffline?window.ssOffline.cachedUser():null;return null}
 async function needUser(){const u=await sessionUser();if(!u)throw apiError('Sign in to continue.',401);return u}
 const shapeUser=u=>u?{listener:!!(u.user_metadata&&u.user_metadata.listener==='true'),id:u.id,email:u.email,avatar:(u.user_metadata&&u.user_metadata.avatar_url)||'',username:(u.user_metadata&&u.user_metadata.username)||'',name:(u.user_metadata&&u.user_metadata.name)||String(u.email||'').split('@')[0]}:null;
-async function myCreator(u,cols){return ok(await sb.from('creators').select(cols||'id,type,name,location,verified,description,avatar_url').eq('user_id',u.id).maybeSingle())}
+async function myCreator(u,cols){if(!cols)return ok(await sb.rpc('creator_me'));return ok(await sb.from('creators').select(cols).eq('user_id',u.id).maybeSingle())}
 
 /* Database rows -> the shapes the page renders */
 const TYPE_LABEL={church:'Church',ministry:'Ministry',choir:'Choir',artist:'Gospel artist',other:'Christian group'};
@@ -1088,11 +1095,11 @@ async function route(method,path,body){
   if(p==='/support/read'){await needUser();ok(await sb.rpc('mark_support_read'));return{ok:true}}
   if(p==='/likes'){await needUser();return ok(await sb.rpc('toggle_like',{p_content:body.id}))}
   if(p==='/creators/register'){
-   const rec={p_type:body.type,p_name:body.name,p_location:body.location,p_description:body.description||'',p_permission:!!body.permission};
+   const rec={p_type:body.type,p_name:body.name,p_location:body.location,p_description:body.description||'',p_permission:!!body.permission,p_username:userKey(body.username),p_phone:phoneKey(body.phone),p_category:body.category,p_contact_person:body.contact_person||'',p_address:body.address||'',p_website:body.website||''};
    if(await sessionUser())return{creator:ok(await sb.rpc('become_creator',rec))};
    const email=String(body.email||'').trim();
    if(!email||!body.password)throw apiError('Enter an email and a password to create your account.');
-   const d=ok(await sb.auth.signUp({email,password:body.password,options:{data:{name:body.name,creator_type:body.type,creator_location:body.location,creator_description:body.description||'',creator_permission:!!body.permission}}}));
+   const d=ok(await sb.auth.signUp({email,password:body.password,options:{data:{name:body.name}}}));
    if(d.user&&d.user.identities&&!d.user.identities.length)throw apiError('An account with this email already exists. Sign in instead.',409);
    if(!d.session)ok(await sb.auth.signInWithPassword({email,password:String(body.password)}));
    let c=await myCreator(d.user);
@@ -1336,10 +1343,20 @@ async function loadCreator(){
 const AUI={mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',lock:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',pin:'<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',eye:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',music:'<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',up:'<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>',chart:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>'};
 const auIn=(icon,name,label,type,extra)=>`<div class="au-field"><label for="au-${name}-${type}">${label}</label><div class="au-input"><span class="au-ico">${ic(AUI[icon],18)}</span><input id="au-${name}-${type}" name="${name}" type="${type}" ${extra||''}>${name==='password'?`<button type="button" class="au-eye" aria-label="Show password" onclick="auEye(this)">${ic(AUI.eye,18)}</button>`:''}</div></div>`;
 let authTab='login';
+AUI.phone='<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>';AUI.web='<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>';
+const CCATS={church:['Pentecostal','Born Again','Anglican (Church of Uganda)','Catholic','Seventh-day Adventist','Baptist','Methodist','Orthodox','Other church'],ministry:['Worship ministry','Teaching and preaching','Evangelism','Youth ministry','Children ministry','Media and music ministry','Other ministry'],choir:['Church choir','Youth choir','Gospel group','Praise and worship team','Other group'],artist:['Gospel singer','Worship leader','Instrumentalist','Songwriter','Preacher or speaker','Other'],other:['Other']};
+function catSync(f){const s=f.category;s.innerHTML='<option value="">Choose a category</option>'+(CCATS[f.type.value]||[]).map(c=>`<option>${c}</option>`).join('')}
 function signupHtml(){
- const profile=`<div class="au-field"><label>I am a</label><div class="type-grid">${CTYPES.map((t,i)=>`<label class="type-opt"><input type="radio" name="type" value="${t[0]}"${i?'':' checked'}><span>${t[1]}</span></label>`).join('')}</div></div>
-  <div class="au-row">${auIn('user','name','Name of church, ministry or artist','text','required autocomplete="organization"')}${auIn('pin','location','Town or city','text','required')}</div>
-  <div class="au-field"><label for="au-desc">About you <em>(optional)</em></label><textarea id="au-desc" name="description" rows="3" class="au-area" placeholder="A few words about your ministry or music"></textarea></div>`;
+ const profile=`<div class="au-field"><label>I am a</label><div class="type-grid">${CTYPES.map((t,i)=>`<label class="type-opt"><input type="radio" name="type" value="${t[0]}"${i?'':' checked'} onchange="catSync(this.form)"><span>${t[1]}</span></label>`).join('')}</div></div>
+  ${auIn('user','name','Name of church, ministry, group or artist','text','required maxlength="120" autocomplete="organization"')}
+  <div class="au-field"><label for="au-cat">Category</label><select id="au-cat" name="category" class="au-area" style="height:auto" required><option value="">Choose a category</option>${CCATS.church.map(c=>`<option>${c}</option>`).join('')}</select></div>
+  ${auIn('user','contact_person','Contact person (leader or manager)','text','required maxlength="120"')}
+  ${auIn('user','username','Username (needed to recover your password)','text','required pattern="[A-Za-z][A-Za-z0-9_]{2,19}" maxlength="20" autocapitalize="none" autocomplete="username"')}
+  ${auIn('phone','phone','Phone number with country code','tel','required autocomplete="tel" placeholder="+256 7XX XXX XXX"')}
+  ${auIn('pin','location','Location (town or city)','text','required')}
+  ${auIn('pin','address','Street or landmark (optional)','text','maxlength="200"')}
+  ${auIn('web','website','Website or social link (optional)','text','maxlength="200"')}
+  <div class="au-field"><label for="au-desc">About you</label><textarea id="au-desc" name="description" rows="3" class="au-area" placeholder="A few words about your ministry or music"></textarea></div>`;
  const perm=`<label class="check au-check"><input type="checkbox" name="permission" required><span>I will only publish content I own or have permission to share.</span></label>`;
  const side=`<aside class="au-side"><div class="au-logo"></div><h2><span class="w1">Publish.</span> <span class="w2">Reach.</span> <span class="w3">Be</span> <span class="w4">heard.</span></h2><div class="au-brand"><span class="b1">Shalom</span><span class="b2">Stream</span><span class="b3">Studio</span></div><p>Your creator space on ShalomStream is where music, messages and streams are published, and where you see who is listening.</p><ul><li>${ic(AUI.up,18)}<span>Publish songs, sermons and videos</span></li><li>${ic(AUI.music,18)}<span>Share live streams and video links</span></li><li>${ic(AUI.chart,18)}<span>Track plays, views, likes and followers</span></li></ul></aside>`;
  if(user&&user.listener){return ''}
@@ -1352,7 +1369,7 @@ function signupHtml(){
    ${auIn('lock','password','Password','password','required autocomplete="current-password" placeholder="Your password"')}
    <label class="check" style="margin:2px 0 12px"><input type="checkbox" name="remember" ${localStorage.getItem('ss-remember')==='0'?'':'checked'}> <span>Remember me on this device</span></label>
    <div class="form-error" id="lerr" role="alert"></div><button class="gold-btn au-submit" type="submit" id="lsub">Sign in</button>
-   <p class="au-alt">New to ShalomStream? <a href="#" onclick="auTab('signup');return false">Create a free account</a></p></form>
+   <p class="au-alt"><a href="#" onclick="forgotPw();return false">Forgot password?</a></p><p class="au-alt">New to ShalomStream? <a href="#" onclick="auTab('signup');return false">Create a free account</a></p></form>
   <form id="cform" novalidate class="au-form au-pane" data-pane="signup"><h3>Create your creator account</h3><p class="au-sub">Free for churches, ministries, choirs and artists.</p>
    ${profile}
    ${auIn('mail','email','Email address','email','required autocomplete="email" placeholder="you@example.com"')}
@@ -1378,7 +1395,7 @@ function bindSignup(){
   ev.preventDefault();const f=ev.target;if(!f.checkValidity()){f.reportValidity();return}
   $('cerr').textContent='';$('csub').disabled=true;$('csub').textContent='Please wait…';
   const label=user?'Create creator profile':'Create creator account';
-  try{const r=await api.post('/creators/register',Object.fromEntries(new FormData(f)));if(r&&r.user)setUser(r.user);toast('Creator account created');await loadCreator()}
+  try{const r=await api.post('/creators/register',Object.fromEntries(new FormData(f)));if(r&&r.user)setUser(r.user);toast('Registration submitted. The admin will review it.');await loadCreator()}
   catch(err){$('cerr').textContent=err.message;$('csub').disabled=false;$('csub').textContent=label}
  });
  auTab(authTab);
@@ -1426,7 +1443,7 @@ function engagementCards(PC){
 
 function prevImg(i,id){const f=i.files[0],t=$(id);if(f&&t)t.innerHTML=`<span class="av ${id==='cvPrev'?'lg sq':'xl'}" style="background-image:url('${URL.createObjectURL(f)}')"></span>`}
 /* Optional cover picker: choose a ready-made cover or upload an image. Used by every publish form. */
-const cvDot=k=>`<span class="cv-dot">${k==='link'?I.play:ic(MUSIC_IC,16,2)}</span>`;
+const cvDot=k=>`<span class="cv-dot">${k==='link'?I.play:ic(NOTE,16,2)}</span>`;
 function coverField(kind){
  const tiles=ART_COLORS.map((c,n)=>`<button type="button" class="cv-pick" aria-label="Cover style ${n+1}" style="background:linear-gradient(140deg,${c[0]},${c[1]})" onclick="cvPreset(${n})">${cvDot(kind)}</button>`).join('');
  return `<div class="field cv-wrap" data-kind="${kind}"><label>Cover image <em>(optional)</em></label><div class="cv-top"><span class="cv-prev" id="cvPrev">${I.noteS}</span><div class="cv-main"><div class="cv-picks" role="group" aria-label="Ready-made covers">${tiles}</div><div class="cv-acts"><label class="outline-btn pf-pick">Upload image<input type="file" name="cover" accept="image/jpeg,image/png,image/webp" hidden onchange="cvFile(this)"></label><button type="button" class="outline-btn" id="cvClear" hidden onclick="cvClear()">Remove</button></div></div></div><input type="hidden" name="coverPreset" value=""><small class="gate-hint">${kind==='link'?'Skip it and the video’s own picture is used.':'Skip it and songs show a music icon, videos use a frame from the video.'}</small></div>`}
@@ -1476,12 +1493,12 @@ function openCover(id){
 }
 function editProfile(){
  const c=creator;if(!c)return;
- showModal(`<h2>Edit profile</h2><p>This is what listeners see when they open your profile.</p><form id="pform" novalidate><div class="field"><div class="pf-av"><span id="pfPrev">${av(c.avatar_url,c.name,'xl')}</span><label class="outline-btn pf-pick">Choose profile photo<input type="file" name="avatar" accept="image/jpeg,image/png,image/webp" hidden onchange="prevImg(this,'pfPrev')"></label></div></div><div class="field"><label>Name</label><input name="name" value="${e(c.name)}" required maxlength="120"></div><div class="field"><label>Town or city</label><input name="location" value="${e(c.location||'')}" maxlength="120"></div><div class="field"><label>About</label><textarea name="description" rows="4" maxlength="1000">${e(c.description||'')}</textarea></div><div class="form-error" id="ferr" role="alert"></div><button class="gold-btn" type="submit" id="fsub">Save profile</button></form>`);
+ showModal(`<h2>Edit profile</h2><p>This is what listeners see when they open your profile.</p><form id="pform" novalidate><div class="field"><div class="pf-av"><span id="pfPrev">${av(c.avatar_url,c.name,'xl')}</span><label class="outline-btn pf-pick">Choose profile photo<input type="file" name="avatar" accept="image/jpeg,image/png,image/webp" hidden onchange="prevImg(this,'pfPrev')"></label></div></div><p class="c-empty">Your name, location and registration details are fixed. To change them, send a message to the admin from Settings.</p><div class="form-error" id="ferr" role="alert"></div><button class="gold-btn" type="submit" id="fsub">Save profile</button></form>`);
  $('pform').addEventListener('submit',async ev=>{ev.preventDefault();const f=ev.target;if(!f.checkValidity()){f.reportValidity();return}const fd=new FormData(f),file=fd.get('avatar');$('fsub').disabled=true;$('fsub').textContent='Saving…';
-  try{const b={name:fd.get('name'),location:fd.get('location'),description:fd.get('description')};if(file&&file.size)b.avatar=await squareBlob(file,512);await api.post('/creators/me/profile',b);closeModal();toast('Profile saved');await loadCreator();loadAll()}
+  try{const b={name:c.name,location:c.location,description:c.description};if(file&&file.size)b.avatar=await squareBlob(file,512);await api.post('/creators/me/profile',b);closeModal();toast('Profile saved');await loadCreator();loadAll()}
   catch(err){$('ferr').textContent=err.message;$('fsub').disabled=false;$('fsub').textContent='Save profile'}});
 }
-function openUpload(){if(!creator){showAuth('login');return}closeModal();setTab('post')}
+function openUpload(){if(!creator){showAuth('login');return}if(!canPost()){toast('Publishing opens once the admin approves your registration.');return}closeModal();setTab('post')}
 function upSync(){const f=$('uform');if(!f)return;const c=f.category.value,m=c!=='Sermon';$('upMusic').hidden=!m;$('upArtL').textContent=m?'Artist or ministry':'Speaker';$('upWho').textContent=f.artist.value||creator.name;$('upWhat').textContent=[c].concat(m?[f.genre.value,f.album.value]:[]).filter(Boolean).join(', ')}
 function upEdit(on){$('upSaved').hidden=on;$('upFields').hidden=!on}
 const DOTS_V='<circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>';
@@ -1498,7 +1515,7 @@ function ppSwitch(kind,mode){
  const f=$('ppform'),keep=f?{title:f.title.value,description:f.description?f.description.value:''}:{};
  openPost(kind,mode,keep);
 }
-async function openPost(kind,mode,keep){
+async function openPost(kind,mode,keep){if(!canPost()){toast('Publishing opens once the admin approves your registration.');return}
  if(!creator){showAuth('login');return}
  const K=PK[kind];if(!K)return;mode=K.linkOnly?'link':(kind==='video'?(mode||'file'):'file');keep=keep||{};
  if(ppDefaults===null){try{ppDefaults=await api.get('/creators/me/defaults')||{}}catch(_){ppDefaults={}}}
@@ -1586,7 +1603,7 @@ function openKebab(id,btn){
  btn.setAttribute('aria-expanded','true');
  const m=document.createElement('div');m.id='kebabPop';m.className='kebab-menu kebab-pop';m.setAttribute('role','menu');
  const eid=e(id),it=(fn,l,cls)=>`<button role="menuitem" class="${cls||''}" onclick="closeKebab();${fn}('${eid}')">${l}</button>`;
- m.innerHTML=it('shareItem','Share link')+it('openCover','Change cover')+it('editItem','Edit details')+'<div class="kebab-sep"></div>'+it('delItem','Delete','danger');
+ m.innerHTML=it('shareItem','Share')+it('copyItem','Copy link')+it('openCover','Change cover')+it('editItem','Edit details')+'<div class="kebab-sep"></div>'+it('delItem','Delete','danger');
  document.body.appendChild(m);
  const r=btn.getBoundingClientRect(),h=m.offsetHeight,w=m.offsetWidth;
  let top=r.bottom+6;if(top+h>innerHeight-86)top=Math.max(8,r.top-h-6);
@@ -1599,14 +1616,21 @@ document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeKebab()});
 function showPage(){}function openVideo(){}
 
 /* ===== More menu: primary tabs on the bar, the rest in a sheet ===== */
-const PRI=['overview','content','post','audience'];
+const PRI=['overview','content','post','audience','analytics'];
 const DOTS='<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>';
 function moreBtn(){return `<button class="more-btn${PRI.includes(tab)?'':' on'}" onclick="openMore()" aria-label="More">${ic(DOTS,20)}<span>More</span></button>`}
 function closeMore(){const m=document.getElementById('moreSheet');if(m)m.remove()}
-function openMore(){
- closeMore();const sec=TABS.filter(t=>!PRI.includes(t[0])),can=window.__pwaCanAsk&&window.__pwaCanAsk();
- const d=document.createElement('div');d.id='moreSheet';d.className='sheet';
- d.innerHTML=`<div class="sheet-panel" role="dialog" aria-label="More"><div class="sheet-grab"></div><div class="sheet-grid">${sec.map(([k,l,p])=>`<button class="sheet-item${k===tab?' on':''}" onclick="setTab('${k}')">${ic(p,24)}<span>${l}</span></button>`).join('')}<button class="sheet-item" onclick="closeMore();toggleTheme()">${ic('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>',24)}<span>Day / Night</span></button>${can?`<button class="sheet-item" onclick="closeMore();window.installApp()">${ic('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',24)}<span>Install app</span></button>`:''}</div><button class="outline-btn sheet-out" onclick="closeMore();authClick()">Sign out</button></div>`;
+function openMore(btn){
+ closeMore();
+ const it=(p,l,fn,on)=>`<button role="menuitem" class="${on?'on':''}" onclick="${fn}">${ic(p,20)}<span>${l}</span></button>`;
+ const T=k=>TABS.find(t=>t[0]===k),tb=k=>{const [,l,p]=T(k);return it(p,l,`setTab('${k}')`,k===tab)};
+ const items=tb('profile')
+  +it('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>','Share profile',"closeMore();sharePub()")
+  +it('<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/>','Copy profile link',"closeMore();copyPub()")
+  +tb('settings');
+ const r=(btn&&btn.getBoundingClientRect)?btn.getBoundingClientRect():{bottom:70,right:innerWidth-16};
+ const d=document.createElement('div');d.id='moreSheet';d.className='pop-back';
+ d.innerHTML=`<div class="pop-menu" role="menu" aria-label="More options" style="top:${Math.round(r.bottom+6)}px;right:${Math.max(8,Math.round(innerWidth-r.right))}px">${items}</div>`;
  d.onclick=ev=>{if(ev.target===d)closeMore()};document.body.appendChild(d);
 }
 
@@ -1640,6 +1664,9 @@ const pubUrl=()=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/u/'+encodeURICompone
 const slugOf=n=>String(n||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9._]+/g,'-').replace(/^-+|-+$/g,'')||'creator';
 const contentUrl=id=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/c/'+encodeURIComponent(id):PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
 const kindOf=()=>(CTYPES.find(t=>t[0]===creator.type)||[0,'Creator'])[1];
+const canPost=()=>!!creator&&creator.status==='approved';
+const stLabel=()=>creator.status==='approved'?'Approved':creator.status==='rejected'?'Not approved':'Awaiting approval';
+function stBanner(){if(canPost())return'';return creator.status==='rejected'?card('Your registration was not approved','<p class="c-empty">'+e(creator.rejection_reason||'The admin did not approve this registration.')+' You can message the admin from Settings.</p>'):card('Your registration is awaiting approval','<p class="c-empty">The admin is reviewing your details. You can publish as soon as you are approved.</p>')}
 const nPending=()=>((cFeed&&cFeed.recent)||[]).length;
 const seg=(list,cur,fn)=>list.map(([k,l])=>`<button class="seg-btn${k===cur?' active':''}" onclick="${fn}('${k}')">${l}</button>`).join('');
 const title=(t,s)=>`<h2 class="cs-title">${t}</h2><p class="cs-sub">${s}</p>`;
@@ -1665,17 +1692,17 @@ function lists(){
  return `<div class="c-split">${card('Trending now',boom.length?'<div class="c-scroll">'+boom.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span class="badge${c.growth>=50?' hot':''}">${c.growth>=50?'Booming':'Trending'}</span>${pct(c.growth)}</div>`).join('')+'</div>':'<p class="c-empty">Nothing is trending yet. Publish more and check back.</p>')}${card('Most played',top.length?'<div class="c-scroll">'+top.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><i class="meter"><b style="width:${Math.round(c.plays/max*100)}%"></b></i></div><span>${fmtN(c.plays)}</span></div>`).join('')+'</div>':'<p class="c-empty">Plays will show here.</p>')}</div>`;
 }
 function head(actions){
- return `<div class="dash-head"><div class="dash-top"><div class="dash-id">${av(creator.avatar_url,creator.name,'lg')}<div class="dash-info"><h2>${e(creator.name)}</h2><p>${e(kindOf())}${creator.location?', '+e(creator.location):''}</p><span class="badge">${creator.verified?'Verified':'Awaiting verification'}</span>${creator.description?`<p class="dash-about">${e(creator.description)}</p>`:''}</div></div></div>${actions?`<div class="btn-row dash-actions"><button class="gold-btn" onclick="setTab('post')">Upload content</button><button class="outline-btn" onclick="openPost('video','link')">Add stream or video link</button><button class="outline-btn" onclick="editProfile()">Edit profile</button></div>`:''}</div>`;
+ return `<div class="dash-head"><div class="dash-top"><button class="cs-ib cs-dots card-dots" onclick="openMore(this)" aria-label="More options" aria-haspopup="menu">${ic(DOTS_V,22)}</button><div class="dash-id">${av(creator.avatar_url,creator.name,'lg')}<div class="dash-info"><h2>${e(creator.name)}</h2><p>${e(kindOf())}${creator.location?', '+e(creator.location):''}</p><span class="badge">${stLabel()}</span>${creator.description?`<p class="dash-about">${e(creator.description)}</p>`:''}</div></div></div>${actions&&canPost()?`<div class="btn-row dash-actions"><button class="gold-btn" onclick="setTab('post')">Upload content</button><button class="outline-btn" onclick="openPost('video','link')">Add stream or video link</button><button class="outline-btn" onclick="editProfile()">Edit profile</button></div>`:''}</div>`;
 }
 function todo(){
  const p=nPending(),it=[];
  if(p)it.push(tile('<path d="M21 12a8 8 0 0 1-11.5 7.2L3 21l1.8-6A8 8 0 1 1 21 12z"/>',p+' comment'+(p>1?'s':'')+' waiting for a reply','Open Audience to reply privately',"setTab('audience')"));
- if(!cContent.length)it.push(tile('<path d="M12 5v14M5 12h14"/>','Publish your first item','Upload a song, message or video',"setTab('post')"));
+ if(!cContent.length&&canPost())it.push(tile('<path d="M12 5v14M5 12h14"/>','Publish your first item','Upload a song, message or video',"setTab('post')"));
  if(!creator.avatar_url||!creator.description)it.push(tile('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>','Complete your profile','Add a picture and a short description',"editProfile()"));
  return it.length?`<div class="cs-tiles">${it.join('')}</div>`:'';
 }
 function vOverview(){
- return head()+(creator.verified?'':card('Your profile is awaiting verification','<p class="c-empty">Our team checks every new creator. Once verified, you appear in Artists &amp; Ministries and people can follow you. Everything you publish goes live right away.</p>'))+todo()+perBar()+stats()+card(`Performance <span class="seg" style="float:right" role="group" aria-label="Metric">${seg(MET,cMetric,'setCMetric')}</span>`,lineChart(cMetric))+lists();
+ return head()+stBanner()+todo()+perBar()+stats()+card(`Performance <span class="seg" style="float:right" role="group" aria-label="Metric">${seg(MET,cMetric,'setCMetric')}</span>`,lineChart(cMetric))+lists();
 }
 function rows(){
  const q=cQ.toLowerCase(),PC=(cFeed&&cFeed.per_content)||{};
@@ -1686,7 +1713,7 @@ function vContent(){
  const types=[...new Set(cContent.map(c=>c.type))],R="$('clist').innerHTML=rows()";
  return title('Content',cContent.length+' item'+(cContent.length==1?'':'s')+' published')+`<div class="cs-tools"><input type="search" placeholder="Search your content" aria-label="Search" value="${e(cQ)}" oninput="cQ=this.value;${R}"><select aria-label="Type" onchange="cType=this.value;${R}"><option value="all">All types</option>${types.map(t=>`<option${t===cType?' selected':''}>${e(t)}</option>`).join('')}</select><select aria-label="Sort" onchange="cSort=this.value;${R}">${[['plays','Most played'],['views','Most viewed'],['likes','Most liked'],['growth','Fastest growing'],['title','A to Z']].map(([k,l])=>`<option value="${k}"${k===cSort?' selected':''}>${l}</option>`).join('')}</select><button class="outline-btn" onclick="exportCSV('content')">Export CSV</button><button class="gold-btn" onclick="setTab('post')">Upload</button></div>`+card('All content',`<div id="clist">${rows()}</div>`);
 }
-function vPost(){
+function vPost(){if(!canPost())return title('Post','Publishing opens once your registration is approved.')+stBanner();
  const rec=cContent.slice(0,6);
  return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Post audio','Songs, albums and hymns from an audio file',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Post a message','Sermons, teachings and testimonies',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Post a video','A video file or a video link',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Post a live stream','Link only: YouTube, Facebook, Twitch and more',"openPost('live')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
 }
@@ -1699,19 +1726,20 @@ function vAnalytics(){
  return title('Analytics','See how your content performs over time.')+perBar()+stats()+`<div class="cs-grid2">${MET.map(([k,l])=>card(l,lineChart(k))).join('')}</div><div style="height:16px"></div>`+card('Daily breakdown <button class="outline-btn" style="float:right;height:34px" onclick="exportCSV(\'daily\')">Export CSV</button>',s.length?`<div class="c-scroll"><table class="cs-days"><tr><th>Date</th><th>Views</th><th>Plays</th><th>Likes</th><th>New followers</th></tr>${s.map(x=>`<tr><td>${e(x.date)}</td><td>${fmtN(x.views||0)}</td><td>${fmtN(x.plays||0)}</td><td>${fmtN(x.likes||0)}</td><td>${fmtN(x.followers||0)}</td></tr>`).join('')}</table></div>`:'<p class="c-empty">No data yet.</p>')+lists();
 }
 function vProfile(){
- return title('Profile','How listeners see you on ShalomStream.')+head(true)+`<div class="cs-grid2">${card('Profile details',kv('Name',e(creator.name))+kv('Type',e(kindOf()))+kv('Location',e(creator.location))+kv('About',e(creator.description))+kv('Status',creator.verified?'Verified':'Awaiting verification'))}${card('Account and sharing',kv('Sign-in email',e(user&&user.email))+kv('Public page',`<a class="lnk" href="${e(pubUrl())}" target="_blank" rel="noopener">${e(pubUrl())}</a>`)+`<div class="btn-row" style="margin-top:14px"><button class="gold-btn" onclick="editProfile()">Edit profile</button><button class="outline-btn" onclick="copyPub()">Copy link</button><button class="outline-btn" onclick="sharePub()">Share</button></div>`)}</div>`;
+ const c=creator,V=v=>e(v||'');
+ return head()+`<div class="cs-grid2">${card('Profile details',kv('Name',V(c.name))+kv('Type',e(kindOf()))+kv('Category',V(c.category))+kv('Contact person',V(c.contact_person))+kv('Username',V(c.username))+kv('Email',V(c.email))+kv('Phone',V(c.phone))+kv('Location',V(c.location))+kv('Address',V(c.address))+kv('Website',V(c.website))+kv('About',V(c.description))+kv('Status',stLabel())+'<p class="c-empty">These details are fixed after registration. To change them, message the admin from Settings.</p>')}${card('Change password',resetFormHtml())}</div><div class="btn-row" style="margin-top:16px"><button class="outline-btn" onclick="authClick()">Sign out</button></div>`;
 }
 function vSettings(){
- return title('Settings','Appearance, security and help.')+`<div class="cs-grid2">${lookCard()}${offlineCard()}${card('Appearance','<div class="seg" role="group" aria-label="Theme"><button type="button" class="seg-btn" data-th="light" onclick="setThemeMode(\'light\')">Day</button><button type="button" class="seg-btn" data-th="dark" onclick="setThemeMode(\'dark\')">Night</button></div>')}${card('Change password','<form class="au-form" onsubmit="newPw(event)"><div class="au-field"><label>New password</label><input type="password" name="pw" minlength="6" maxlength="72" required autocomplete="new-password"></div><div class="form-error" id="pwErr" role="alert"></div><button class="gold-btn" type="submit">Update password</button></form>')}${card('Help','<p class="c-empty">Send a complaint, question or appeal to the admin and read their replies here.</p><div class="btn-row"><button class="gold-btn" onclick="openSupport()">Contact admin</button></div>')}${card('Session','<div class="btn-row"><button class="outline-btn" onclick="refreshCreator().then(()=>toast(\'Data refreshed\'))">Refresh data</button><button class="outline-btn" onclick="signOut()">Sign out</button></div>')}</div>`;
+ return title('Settings','Appearance, security and help.')+`<div class="cs-grid2">${lookCard()}${offlineCard()}${card('Appearance','<div class="seg" role="group" aria-label="Theme"><button type="button" class="seg-btn" data-th="light" onclick="setThemeMode(\'light\')">Day</button><button type="button" class="seg-btn" data-th="dark" onclick="setThemeMode(\'dark\')">Night</button></div>')}${card('Help','<p class="c-empty">Send a complaint, question or appeal to the admin and read their replies here.</p><div class="btn-row"><button class="gold-btn" onclick="openSupport()">Contact admin</button></div>')}${card('Session','<div class="btn-row"><button class="outline-btn" onclick="refreshCreator().then(()=>toast(\'Data refreshed\'))">Refresh data</button><button class="outline-btn" onclick="signOut()">Sign out</button></div>')}</div>`;
 }
 const VIEWS={overview:vOverview,content:vContent,post:vPost,audience:vAudience,analytics:vAnalytics,profile:vProfile,settings:vSettings};
-function setTab(t){tab=t;try{localStorage.setItem('ss-tab',t)}catch(_){}closeMore();renderCreator();window.scrollTo(0,0)}
+function setTab(t){if(t==='post'&&!canPost()){toast('Publishing opens once the admin approves your registration.');return}tab=t;try{localStorage.setItem('ss-tab',t)}catch(_){}closeMore();renderCreator();window.scrollTo(0,0)}
 function topbar(){return `<header class="cs-top"><span class="cs-brand">Shalom<b>Stream</b> <em>Studio</em></span><span class="cs-sp"></span><button class="cs-ib" onclick="toggleTheme()" aria-label="Switch day or night mode" title="Day / Night mode">◐</button>${creator?`<button class="cs-ib" onclick="setTab('profile')" aria-label="My profile">${av(creator.avatar_url,creator.name,'')}</button>`:''}</header>`}
 function renderCreator(){
  const root=$('creatorRoot');if(!root)return;
  if(cLoading){root.innerHTML=topbar()+'<div class="empty">Loading…</div>';return}
  if(!creator){root.innerHTML=topbar()+'<div class="section" style="padding-top:35px">'+signupHtml()+'</div>';bindSignup();rememberFill();return}
- root.innerHTML=topbar()+`<div class="cs-layout"><nav class="cs-nav" aria-label="Studio">${TABS.map(([k,l,p])=>`<button class="${k===tab?'on':''}${PRI.includes(k)?'':' sec'}${k==='post'?' post-btn':''}"${k==='post'?' aria-label="Post new content"':''} onclick="setTab('${k}')">${ic(p,20)}<span>${l}</span>${k==='audience'&&nPending()?`<i class="n">${nPending()}</i>`:''}</button>`).join('')}${moreBtn()}</nav><main class="cs-body">${VIEWS[tab]()}</main></div>`;
+ root.innerHTML=topbar()+`<div class="cs-layout"><nav class="cs-nav" aria-label="Studio">${TABS.map(([k,l,p])=>`<button class="${k===tab?'on':''}${PRI.includes(k)?'':' sec'}${k==='post'?' post-btn':''}"${k==='post'?' aria-label="Post new content"':''} onclick="setTab('${k}')">${ic(p,20)}<span>${l}</span>${k==='audience'&&nPending()?`<i class="n">${nPending()}</i>`:''}</button>`).join('')}</nav><main class="cs-body">${VIEWS[tab]()}</main></div>`;
  try{paintThemeSeg()}catch(_){}
  try{ssOffline.paint()}catch(_){}
 }
@@ -1720,9 +1748,26 @@ function exportCSV(w){
  if(w==='content')saveCSV('content.csv',[['Title','Type','Status','Plays','Views','Likes','Watching','Growth %']].concat(cContent.map(c=>[c.title,c.type,c.status,c.plays,c.views,c.likes||0,c.watching||0,c.growth||0])));
  else saveCSV('daily-'+cPeriod+'.csv',[['Date','Views','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
 }
-function copyPub(){try{navigator.clipboard.writeText(pubUrl()).then(()=>toast('Profile link copied'),()=>toast('Could not copy the link'))}catch(_){toast('Could not copy the link')}}
-async function shareItem(id){const c=(cContent||[]).find(x=>String(x.id)===String(id)),u=contentUrl(id);try{if(navigator.share){await navigator.share({title:((c&&c.title)||'Content')+' on ShalomStream',text:((c&&c.title)||'Content')+' · Content from Shalom Stream',url:u});return}await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){}}
-async function sharePub(){try{if(navigator.share){await navigator.share({title:creator.name+' on ShalomStream',text:creator.name+' · Creator on Shalom Stream',url:pubUrl()});return}}catch(_){return}copyPub()}
+function copyPub(){copyText(pubUrl(),'Profile link copied')}
+async function copyText(u,msg){try{await navigator.clipboard.writeText(u);toast(msg||'Link copied')}catch(_){const t=document.createElement('textarea');t.value=u;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{document.execCommand('copy');toast(msg||'Link copied')}catch(__){toast('Could not copy the link')}t.remove()}}
+function shareFallback(title,text,u){
+ const q=encodeURIComponent,full=q(text+' '+u);
+ const o=(href,l)=>`<a class="outline-btn" style="display:block;text-align:center;text-decoration:none;margin:6px 0" target="_blank" rel="noopener" href="${href}">${l}</a>`;
+ showModal(`<div class="pp-done"><h2>Share</h2><p><strong>${e(title)}</strong></p>${o('https://wa.me/?text='+full,'WhatsApp')}${o('https://www.facebook.com/sharer/sharer.php?u='+q(u),'Facebook')}${o('https://twitter.com/intent/tweet?text='+q(text)+'&url='+q(u),'X')}${o('https://t.me/share/url?url='+q(u)+'&text='+q(text),'Telegram')}${o('mailto:?subject='+q(title)+'&body='+full,'Email')}</div>`);
+}
+async function doShare(title,text,u){
+ if(navigator.share){try{await navigator.share({title,text,url:u})}catch(_){}return}
+ shareFallback(title,text,u);
+}
+function copyItem(id){copyText(contentUrl(id),'Link copied')}
+async function shareItem(id){const c=(cContent||[]).find(x=>String(x.id)===String(id)),t=(c&&c.title)||'Content';await doShare(t+' on ShalomStream',t+' · Content from Shalom Stream',contentUrl(id))}
+async function sharePub(){await doShare(creator.name+' on ShalomStream',creator.name+' · Creator on Shalom Stream',pubUrl())}
+function resetFormHtml(){return `<form class="au-form" onsubmit="resetGo(event)"><p class="c-empty">Enter the details you registered with. Your password changes only when all of them match.</p><div class="au-field"><label>Email</label><input name="email" type="email" required autocomplete="off"></div><div class="au-field"><label>Username</label><input name="username" required autocomplete="off" autocapitalize="none"></div><div class="au-field"><label>Phone number</label><input name="phone" type="tel" required autocomplete="off" placeholder="+256 7XX XXX XXX"></div><div class="au-field"><label>Account type</label><select name="type" required class="au-area" style="height:auto"><option value="">Select type</option>${CTYPES.map(t=>`<option value="${t[0]}">${t[1]}</option>`).join('')}</select></div><div class="au-field"><label>New password</label><input type="password" name="pw" minlength="8" maxlength="72" required autocomplete="new-password"></div><div class="form-error" role="alert"></div><button class="gold-btn" type="submit">Update password</button></form>`}
+function forgotPw(){showModal('<h2>Reset your password</h2>'+resetFormHtml())}
+async function resetGo(ev){ev.preventDefault();const f=ev.target,fd=new FormData(f),er=f.querySelector('.form-error'),bt=f.querySelector('button[type=submit]');er.textContent='';bt.disabled=true;
+ try{const em=String(fd.get('email')).trim(),pw=String(fd.get('pw')),r=await sb.rpc('reset_creator_password',{p_email:em,p_username:fd.get('username'),p_phone:fd.get('phone'),p_type:fd.get('type'),p_password:pw});if(r.error)throw r.error;
+  const l=await api.post('/auth/login',{email:em,password:pw});setUser(l.user);closeModal();toast('Password updated');await loadCreator()}
+ catch(err){er.textContent=err.message||'Could not update the password.';bt.disabled=false}}
 async function newPw(ev){ev.preventDefault();const f=ev.target;try{const r=await sb.auth.updateUser({password:f.pw.value});if(r.error)throw r.error;f.reset();toast('Password updated')}catch(er){$('pwErr').textContent=er.message||'Could not update the password.'}}
 async function editItem(id){
  const r=await sb.from('content').select('title,description').eq('id',id).maybeSingle(),c=r.data||{};
