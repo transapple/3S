@@ -1116,7 +1116,7 @@ async function route(method,path,body){
    if(!email||!body.password)throw apiError('Enter an email and a password to create your account.');
    const d=ok(await sb.auth.signUp({email,password:body.password,options:{data:{name:body.name}}}));
    if(d.user&&d.user.identities&&!d.user.identities.length)throw apiError('An account with this email already exists. Sign in instead.',409);
-   if(!d.session)ok(await sb.auth.signInWithPassword({email,password:String(body.password)}));
+   if(!d.session){const si=await sb.auth.signInWithPassword({email,password:String(body.password)});if(si.error){if(/not confirmed/i.test(si.error.message||''))throw apiError('Almost done! We sent a confirmation link to '+email+'. Open it, then sign in here to finish setting up your creator profile.',400);throw si.error}}
    let c=await myCreator(d.user);
    if(!c)c=ok(await sb.rpc('become_creator',rec));
    return{user:shapeUser(d.user),creator:c};
