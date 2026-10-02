@@ -635,6 +635,11 @@ svg{display:block;flex:none}
 #closePlayer:hover,#npClose:hover{background:#c92a22!important}
 #closePlayer svg,#npClose svg{stroke:#fff}
 button[onclick="closeProfile()"]{background:#e5382f!important;color:#fff!important;border-color:#e5382f!important}
+/* no text selection, caret or copy/paste outside real input fields */
+*,*::before,*::after{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+body{caret-color:transparent}
+input:not([readonly]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=submit]),textarea:not([readonly]){-webkit-user-select:text;user-select:text;caret-color:auto}
+.song-card .lnk,.video-card .lnk{-webkit-user-select:none;user-select:none}
 </style>
 <style>
 /* ===== Fit the screen: nothing wider than the viewport; wide parts scroll on their own ===== */
@@ -724,6 +729,14 @@ img,svg,video,canvas,iframe{max-width:100%}
 <div id="creatorRoot"><div class="empty">Loading…</div></div>
 <div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()"><div class="modal"><button class="close" onclick="closeModal()">×</button><div id="modalContent"></div></div></div>
 <div class="toast" id="toast"></div>
+<script>(function(){
+window.ssCopyOK=false;
+window.ssExec=function(){window.ssCopyOK=true;try{return document.execCommand('copy')}finally{window.ssCopyOK=false}};
+var stop=function(e){if(window.ssCopyOK)return;e.preventDefault();e.stopPropagation()};
+['copy','cut','paste','contextmenu','dragstart'].forEach(function(n){document.addEventListener(n,stop,true)});
+document.addEventListener('selectstart',function(e){var t=e.target;if(t&&t.nodeType===3)t=t.parentNode;if(t&&t.closest&&t.closest('input,textarea'))return;e.preventDefault()},true);
+document.addEventListener('selectionchange',function(){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))return;var g=window.getSelection&&getSelection();if(g&&!g.isCollapsed&&!window.ssCopyOK)g.removeAllRanges()});
+})()</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 /* ===== Offline engine: saves what you read, queues what you write, sends it when the internet is back ===== */
@@ -1593,7 +1606,7 @@ function ppDone(kind,title,item,isLink){
  const url=id?contentUrl(id):'';
  showModal(`<div class="pp-done"><div class="pp-check">${ic('<path d="M5 12.5l4.5 4.5L19 7.5"/>',34,2.6)}</div><h2>${id?'Published':'Saved'}</h2><p><strong>${e(title)}</strong> ${id?'is live on ShalomStream.':'will be sent automatically when you are back online.'}</p>${url?`<div class="pp-link"><input readonly value="${e(url)}" onfocus="this.select()" aria-label="Share link"></div><div class="btn-row"><button class="gold-btn" onclick="ppCopy('${e(id)}')">Copy link</button><button class="outline-btn" onclick="shareItem('${e(id)}')">Share</button></div>`:''}<div class="btn-row pp-more"><button class="outline-btn" onclick="closeModal();setTab('content')">View in Content</button><button class="outline-btn" onclick="openPost('${kind}','${isLink?'link':'file'}')">Post another</button></div></div>`);
 }
-async function ppCopy(id){const u=contentUrl(id);try{await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){const i=document.querySelector('.pp-link input');if(i){i.select();try{document.execCommand('copy');toast('Link copied')}catch(__){toast('Press and hold the link to copy it')}}}}
+async function ppCopy(id){const u=contentUrl(id);try{await navigator.clipboard.writeText(u);toast('Link copied')}catch(_){const i=document.querySelector('.pp-link input');if(i){i.select();try{ssExec();toast('Link copied')}catch(__){toast('Press and hold the link to copy it')}}}}
 
 /* ===== Content list: three-dot menu ===== */
 function closeKebab(){const m=$('kebabPop');if(m)m.remove();document.querySelectorAll('.kebab-btn[aria-expanded=true]').forEach(b=>b.setAttribute('aria-expanded','false'))}
@@ -1748,7 +1761,7 @@ function exportCSV(w){
  else saveCSV('daily-'+cPeriod+'.csv',[['Date','Views','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
 }
 function copyPub(){copyText(pubUrl(),'Profile link copied')}
-async function copyText(u,msg){try{await navigator.clipboard.writeText(u);toast(msg||'Link copied')}catch(_){const t=document.createElement('textarea');t.value=u;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{document.execCommand('copy');toast(msg||'Link copied')}catch(__){toast('Could not copy the link')}t.remove()}}
+async function copyText(u,msg){try{await navigator.clipboard.writeText(u);toast(msg||'Link copied')}catch(_){const t=document.createElement('textarea');t.value=u;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{ssExec();toast(msg||'Link copied')}catch(__){toast('Could not copy the link')}t.remove()}}
 function shareFallback(title,text,u){
  const q=encodeURIComponent,full=q(text+' '+u);
  const o=(href,l)=>`<a class="outline-btn" style="display:block;text-align:center;text-decoration:none;margin:6px 0" target="_blank" rel="noopener" href="${href}">${l}</a>`;
