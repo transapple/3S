@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script>(function(){var h=location.hash;if(/^#(content=|creator=|\/[^\/]+\/[^\/]+)/.test(h)){location.replace("https://transapple.github.io/Shalom-Stream/"+h)}})()</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
 <link rel="manifest" href="manifest.json"><link rel="icon" type="image/png" href="logo.png"><link rel="apple-touch-icon" href="logo-icon.png"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Studio">
@@ -1488,9 +1489,10 @@ const DOTS_V='<circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><
 const PK={
  music:{title:'Upload music',text:'Songs, albums and hymns. Choose an audio file and publish it to your audience.',accept:'audio/*',fileL:'Audio file',fileHint:'MP3, M4A, WAV, AAC or OGG, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir'],artL:'Artist or ministry',want:'audio',noun:'song'},
  message:{title:'Upload a message',text:'Sermons, teachings and testimonies. Upload an audio or video recording.',accept:'audio/*,video/*',fileL:'Audio or video file',fileHint:'MP3, M4A, WAV, MP4 or WebM, up to 50 MB.',cats:null,artL:'Speaker',want:'any',noun:'message'},
- video:{title:'Upload a video',text:'Video files you own or may share.',accept:'video/*',fileL:'Video file',fileHint:'MP4, WebM, MOV or 3GP, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir','Sermon'],artL:'Church or ministry',want:'video',noun:'video'}
+ video:{title:'Post a video',text:'Upload a video file, or paste a video link.',accept:'video/*',fileL:'Video file',fileHint:'MP4, WebM, MOV or 3GP, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir','Sermon'],artL:'Church or ministry',want:'video',noun:'video'},
+ live:{title:'Post a live stream',text:'Paste the link to your live stream. Listeners open it straight on ShalomStream.',noun:'live stream',linkOnly:true}
 };
-const PK_ICON={music:NOTE,message:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>',video:'<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>'};
+const PK_ICON={music:NOTE,message:'<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>',video:'<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>',live:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'};
 let ppDefaults=null,ppBusy=false;
 function ppSwitch(kind,mode){
  const f=$('ppform'),keep=f?{title:f.title.value,description:f.description?f.description.value:''}:{};
@@ -1498,19 +1500,19 @@ function ppSwitch(kind,mode){
 }
 async function openPost(kind,mode,keep){
  if(!creator){showAuth('login');return}
- const K=PK[kind];if(!K)return;mode=mode||'file';keep=keep||{};
+ const K=PK[kind];if(!K)return;mode=K.linkOnly?'link':(kind==='video'?(mode||'file'):'file');keep=keep||{};
  if(ppDefaults===null){try{ppDefaults=await api.get('/creators/me/defaults')||{}}catch(_){ppDefaults={}}}
  const d=ppDefaults||{},isMusic=kind==='music',isLink=mode==='link';
  const opt=(A,v)=>A.map(x=>`<option value="${e(x)}"${x===v?' selected':''}>${e(x||'No genre')}</option>`).join('');
  const GEN=['','Worship','Praise','Gospel','Hymns','Choir','Contemporary','Afro gospel','Instrumental','Kids'];
  const albums=isMusic?[...new Set(songs.filter(s=>String(s.creatorId)===String(creator.id)&&s.album).map(s=>s.album).concat(d.album?[d.album]:[]))]:[];
  const seg=`<div class="seg pp-seg" role="group" aria-label="How to post"><button type="button" class="seg-btn${isLink?'':' active'}" onclick="ppSwitch('${kind}','file')">Upload a file</button><button type="button" class="seg-btn${isLink?' active':''}" onclick="ppSwitch('${kind}','link')">Paste a link</button></div>`;
+ const segHtml=kind==='video'?seg:'';
  let body;
  if(isLink){
-  body=`<div class="field"><label>Link</label><input name="url" type="url" required inputmode="url" placeholder="https://youtube.com/watch?v=…"><small class="gate-hint">YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch, Google Drive or a direct video file link. Links play as videos on ShalomStream.</small></div>
+  body=`<div class="field"><label>Link</label><input name="url" type="url" required inputmode="url" placeholder="https://youtube.com/watch?v=…"><small class="gate-hint">YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch, Google Drive or a direct video file link. ${kind==='live'?'It opens as a live stream on ShalomStream.':'It plays as a video on ShalomStream.'}</small></div>
 <div class="field"><label>Title</label><input name="title" required maxlength="160" value="${e(keep.title||'')}"></div>
-<div class="field"><label>${kind==='message'?'Speaker, church or ministry':'Church, ministry or artist'}</label><input name="channel" maxlength="120" value="${e(d.artist||creator.name)}"></div>
-<div class="field"><label>This link is a</label><select name="kind"><option>Video</option><option>Live stream</option></select></div>
+<div class="field"><label>Church, ministry or artist</label><input name="channel" maxlength="120" value="${e(d.artist||creator.name)}"></div>
 ${coverField('link')}`;
  }else{
   body=`<div class="field"><label>${K.fileL}</label><input name="file" type="file" required accept="${K.accept}" onchange="ppPick(this,'${kind}')"><small class="gate-hint">${K.fileHint}</small><div id="ppPrev" class="pp-prev" hidden></div></div>
@@ -1523,7 +1525,7 @@ ${isMusic?`<div class="field"><label>Genre <em>(optional)</em></label><select na
  body+=`<div class="field"><label>Description <em>(optional)</em></label><textarea name="description" rows="3" maxlength="2000">${e(keep.description||'')}</textarea></div>
 <label class="check"><input type="checkbox" name="permission" required> <span>I own this content or have permission to publish it.</span></label>
 <div class="form-error" id="ferr" role="alert"></div><button class="gold-btn pp-submit" type="submit" id="fsub">${isLink?'Add to ShalomStream':'Publish '+K.noun}</button>`;
- showModal(`<h2>${K.title}</h2><p>${K.text}</p>${seg}<form id="ppform" novalidate>${body}</form>`);
+ showModal(`<h2>${K.title}</h2><p>${K.text}</p>${segHtml}<form id="ppform" novalidate>${body}</form>`);
  $('ppform').addEventListener('submit',ev=>{ev.preventDefault();ppSubmit(kind,isLink)});
 }
 function ppPick(inp,kind){
@@ -1546,7 +1548,7 @@ async function ppSubmit(kind,isLink){
   if(isLink){
    const d=Object.fromEntries(fd),cvf=fd.get('cover');
    if(cvf&&cvf.size>15*1024*1024)throw new Error('Choose a cover image under 15 MB.');
-   d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.title=title;d.kind=d.kind==='Live stream'?'live':'video';
+   d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.title=title;d.kind=kind==='live'?'live':'video';
    const x=parseUrl(d.url);const ok=x&&x.protocol==='https:'&&(toEmbed(d.url)||/(^|\.)(youtube\.com|youtu\.be|facebook\.com|fb\.watch)$/.test(x.hostname));
    if(!ok)throw new Error('Paste an https link from YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch or Google Drive, or a direct video file link.');
    await api.post('/content/links',d);
@@ -1632,9 +1634,10 @@ addEventListener('online',()=>setTimeout(()=>warmOffline(),4000));
 let tab='overview';try{const t0=localStorage.getItem('ss-tab');if(t0)tab=t0}catch(_){}let cQ='',cType='all',cSort='plays';
 const TABS=[['overview','Overview','<path d="M3 12l9-8 9 8M5 10v10h14V10"/>'],['content','Content',NOTE],['post','Post','<path d="M12 5v14M5 12h14"/>'],['audience','Audience','<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>'],['analytics','Analytics','<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],['profile','Profile','<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'],['settings','Settings','<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>']];
 const PER=[['7d','7 days'],['30d','30 days'],['90d','90 days']],MET=[['views','Views'],['plays','Plays'],['likes','Likes'],['followers','New followers']];
-const PUBLIC_SITE='https://transapple.github.io/3S/';/* the real listener site: share links open creators here */
+const PUBLIC_SITE='https://transapple.github.io/Shalom-Stream/';/* the real listener site: share links open creators here */
 const pubUrl=()=>PUBLIC_SITE.replace(/\/?$/,'/')+'#creator='+creator.id;/* https link: opens the app if installed, otherwise the browser */
-const contentUrl=id=>PUBLIC_SITE.replace(/\/?$/,'/')+'#content='+encodeURIComponent(id);
+const slugOf=n=>String(n||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9._]+/g,'-').replace(/^-+|-+$/g,'')||'creator';
+const contentUrl=id=>PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
 const kindOf=()=>(CTYPES.find(t=>t[0]===creator.type)||[0,'Creator'])[1];
 const nPending=()=>((cFeed&&cFeed.recent)||[]).length;
 const seg=(list,cur,fn)=>list.map(([k,l])=>`<button class="seg-btn${k===cur?' active':''}" onclick="${fn}('${k}')">${l}</button>`).join('');
@@ -1684,7 +1687,7 @@ function vContent(){
 }
 function vPost(){
  const rec=cContent.slice(0,6);
- return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Upload music','Songs, albums and hymns from an audio file',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Upload a message','Sermons, teachings and testimonies',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Upload a video','Video files you own or may share',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Add a link or live stream','YouTube, Facebook, Vimeo, Twitch and more',"openPost('video','link')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
+ return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Post audio','Songs, albums and hymns from an audio file',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Post a message','Sermons, teachings and testimonies',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Post a video','A video file or a video link',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Post a live stream','Link only: YouTube, Facebook, Twitch and more',"openPost('live')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
 }
 function vAudience(){
  const T=(cData&&cData.totals)||{},C=(cData&&cData.changes)||{};
