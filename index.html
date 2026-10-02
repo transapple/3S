@@ -1079,7 +1079,9 @@ async function route(method,path,body){
  }
  if(method==='POST'){
   if(p==='/auth/login'){
-   const d=ok(await sb.auth.signInWithPassword({email:String(body.email||'').trim(),password:String(body.password||'')}));
+   let em=String(body.email||'').trim();
+   if(em&&em.indexOf('@')<0){const lr=await sb.rpc('creator_login_email',{p_username:em.toLowerCase()});if(lr.error)throw apiError('Could not look up that username. Try your email instead.',400);if(!lr.data)throw apiError('No creator account found with that username.',400);em=lr.data}
+   const d=ok(await sb.auth.signInWithPassword({email:em,password:String(body.password||'')}));
    return{user:shapeUser(d.user)};
   }
   if(p==='/auth/logout'){ok(await sb.auth.signOut({scope:'local'}));return{ok:true}}
@@ -1298,7 +1300,7 @@ const INFO={
 };
 const FORMS={
  link:{title:'Add a stream or video link',text:'Paste a YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch or Google Drive link, or a direct video file link. It plays right here on ShalomStream.',submit:'Add to ShalomStream',fields:[['title','Title','text'],['channel','Church or ministry','text'],['kind','This link is a','select',['Live stream','Video']],['url','YouTube or Facebook link','url'],['cover','Cover image','cover']],run:async fd=>{const d=Object.fromEntries(fd);const cvf=fd.get('cover');if(cvf&&cvf.size>15*1024*1024)throw new Error('Choose a cover image under 15 MB.');d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.kind=d.kind==='Live stream'?'live':'video';const x=parseUrl(d.url);const ok=x&&x.protocol==='https:'&&(toEmbed(d.url)||/(^|\.)(youtube\.com|youtu\.be|facebook\.com|fb\.watch)$/.test(x.hostname));if(!ok)throw new Error('Paste an https link from YouTube or Facebook, or a direct video file link.');await api.post('/content/links',d);loadAll()},done:'Link added'},
- login:{title:'Creator sign in',text:'Sign in to your creator account to open your dashboard.',submit:'Sign in',fields:[['email','Email','email'],['password','Password','password']],run:async fd=>{const r=await api.post('/auth/login',Object.fromEntries(fd));setUser(r.user);loadAll()},done:'Signed in'},
+ login:{title:'Creator sign in',text:'Sign in to your creator account to open your dashboard.',submit:'Sign in',fields:[['email','Email or username','text'],['password','Password','password']],run:async fd=>{const r=await api.post('/auth/login',Object.fromEntries(fd));setUser(r.user);loadAll()},done:'Signed in'},
  upload:{title:'Publish content',text:'Share music or messages you own or have permission to publish. Your upload goes live as soon as you publish it.',submit:'Publish',fields:[['title','Title','text'],['artist','Artist or ministry','text'],['category','Category','select',['Worship','Gospel','Hymns','Choir','Sermon']],['file','Audio or video file','file'],['description','Description','textarea',0],['permission','I own this content or have permission to publish it.','checkbox']],run:async fd=>{await api.post('/content',fd);loadCreator()},done:'Published'},
  church:{title:'Register a church',text:'Create an official church profile. We verify each church before it is listed.',submit:'Register church',fields:[['name','Church name','text'],['location','Town or city','text'],['email','Contact email','email'],['description','About the church','textarea',0]],run:fd=>api.post('/churches',Object.fromEntries(fd)),done:'Church submitted for verification'}
 };
@@ -1350,12 +1352,9 @@ function signupHtml(){
  const profile=`<div class="au-field"><label>I am a</label><div class="type-grid">${CTYPES.map((t,i)=>`<label class="type-opt"><input type="radio" name="type" value="${t[0]}"${i?'':' checked'} onchange="catSync(this.form)"><span>${t[1]}</span></label>`).join('')}</div></div>
   ${auIn('user','name','Name of church, ministry, group or artist','text','required maxlength="120" autocomplete="organization"')}
   <div class="au-field"><label for="au-cat">Category</label><select id="au-cat" name="category" class="au-area" style="height:auto" required><option value="">Choose a category</option>${CCATS.church.map(c=>`<option>${c}</option>`).join('')}</select></div>
-  ${auIn('user','contact_person','Contact person (leader or manager)','text','required maxlength="120"')}
   ${auIn('user','username','Username (needed to recover your password)','text','required pattern="[A-Za-z][A-Za-z0-9_]{2,19}" maxlength="20" autocapitalize="none" autocomplete="username"')}
   ${auIn('phone','phone','Phone number with country code','tel','required autocomplete="tel" placeholder="+256 7XX XXX XXX"')}
   ${auIn('pin','location','Location (town or city)','text','required')}
-  ${auIn('pin','address','Street or landmark (optional)','text','maxlength="200"')}
-  ${auIn('web','website','Website or social link (optional)','text','maxlength="200"')}
   <div class="au-field"><label for="au-desc">About you</label><textarea id="au-desc" name="description" rows="3" class="au-area" placeholder="A few words about your ministry or music"></textarea></div>`;
  const perm=`<label class="check au-check"><input type="checkbox" name="permission" required><span>I will only publish content I own or have permission to share.</span></label>`;
  const side=`<aside class="au-side"><div class="au-logo"></div><h2><span class="w1">Publish.</span> <span class="w2">Reach.</span> <span class="w3">Be</span> <span class="w4">heard.</span></h2><div class="au-brand"><span class="b1">Shalom</span><span class="b2">Stream</span><span class="b3">Studio</span></div><p>Your creator space on ShalomStream is where music, messages and streams are published, and where you see who is listening.</p><ul><li>${ic(AUI.up,18)}<span>Publish songs, sermons and videos</span></li><li>${ic(AUI.music,18)}<span>Share live streams and video links</span></li><li>${ic(AUI.chart,18)}<span>Track plays, views, likes and followers</span></li></ul></aside>`;
@@ -1365,7 +1364,7 @@ function signupHtml(){
  return `<div class="au-wrap">${side}<div class="au-card">
   <div class="au-tabs" role="tablist"><button type="button" role="tab" id="tab-login" onclick="auTab('login')">Sign in</button><button type="button" role="tab" id="tab-signup" onclick="auTab('signup')">Create account</button><span class="au-slider" id="auSlider"></span></div>
   <form id="lform" novalidate class="au-form au-pane" data-pane="login"><h3>Welcome back</h3><p class="au-sub">Sign in to open your creator dashboard.</p>
-   ${auIn('mail','email','Email address','email','required autocomplete="email" placeholder="you@example.com"')}
+   ${auIn('user','email','Email or username','text','required autocomplete="username" autocapitalize="none" placeholder="you@example.com or username"')}
    ${auIn('lock','password','Password','password','required autocomplete="current-password" placeholder="Your password"')}
    <label class="check" style="margin:2px 0 12px"><input type="checkbox" name="remember" ${localStorage.getItem('ss-remember')==='0'?'':'checked'}> <span>Remember me on this device</span></label>
    <div class="form-error" id="lerr" role="alert"></div><button class="gold-btn au-submit" type="submit" id="lsub">Sign in</button>
@@ -1727,7 +1726,7 @@ function vAnalytics(){
 }
 function vProfile(){
  const c=creator,V=v=>e(v||'');
- return head()+`<div class="cs-grid2">${card('Profile details',kv('Name',V(c.name))+kv('Type',e(kindOf()))+kv('Category',V(c.category))+kv('Contact person',V(c.contact_person))+kv('Username',V(c.username))+kv('Email',V(c.email))+kv('Phone',V(c.phone))+kv('Location',V(c.location))+kv('Address',V(c.address))+kv('Website',V(c.website))+kv('About',V(c.description))+kv('Status',stLabel())+'<p class="c-empty">These details are fixed after registration. To change them, message the admin from Settings.</p>')}${card('Change password',resetFormHtml())}</div><div class="btn-row" style="margin-top:16px"><button class="outline-btn" onclick="authClick()">Sign out</button></div>`;
+ return head()+`<div class="cs-grid2">${card('Profile details',kv('Name',V(c.name))+kv('Type',e(kindOf()))+kv('Category',V(c.category))+kv('Username',V(c.username))+kv('Email',V(c.email))+kv('Phone',V(c.phone))+kv('Location',V(c.location))+kv('About',V(c.description))+kv('Status',stLabel())+'<p class="c-empty">These details are fixed after registration. To change them, message the admin from Settings.</p>')}${card('Change password',resetFormHtml())}</div><div class="btn-row" style="margin-top:16px"><button class="outline-btn" onclick="authClick()">Sign out</button></div>`;
 }
 function vSettings(){
  return title('Settings','Appearance, security and help.')+`<div class="cs-grid2">${lookCard()}${offlineCard()}${card('Appearance','<div class="seg" role="group" aria-label="Theme"><button type="button" class="seg-btn" data-th="light" onclick="setThemeMode(\'light\')">Day</button><button type="button" class="seg-btn" data-th="dark" onclick="setThemeMode(\'dark\')">Night</button></div>')}${card('Help','<p class="c-empty">Send a complaint, question or appeal to the admin and read their replies here.</p><div class="btn-row"><button class="gold-btn" onclick="openSupport()">Contact admin</button></div>')}${card('Session','<div class="btn-row"><button class="outline-btn" onclick="refreshCreator().then(()=>toast(\'Data refreshed\'))">Refresh data</button><button class="outline-btn" onclick="signOut()">Sign out</button></div>')}</div>`;
