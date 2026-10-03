@@ -2,7 +2,7 @@
    - Downloads the whole app (page, icons, fonts, Supabase library) on first open
    - Opens instantly, with or without internet
    - Data and saved changes are handled inside the page (index.html) */
-const VER = 'ss-studio-v3';
+const VER = 'ss-studio-v4';
 const IMG = 'ss-images-v1';
 const SHELL = ['./', './index.html', './manifest.json', './logo.png', './logo-icon.png'];
 const LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
