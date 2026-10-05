@@ -745,7 +745,7 @@ document.addEventListener('selectionchange',function(){var a=document.activeElem
 var SB='https://ixmyndnerktftrgqopry.supabase.co',NF=window.fetch.bind(window),SBC=null,flushing=false,pend=0,flags={warming:false};
 var WRITE_RPC={post_comment:1,delete_comment:1,reply_to_comment:1,mark_replies_read:1,send_support:1,mark_support_read:1,update_creator_profile:1,save_upload_defaults:1,toggle_like:1,set_like:1,set_follow:1};
 var DROP_RPC={heartbeat:1,record_event:1};
-var READ_RPC={watching_now:1,search_songs:1,chart_songs:1,creator_analytics:1,creator_content:1,creator_feedback:1,content_engagement:1,my_replies:1,creator_public:1,my_support:1,get_upload_defaults:1};
+var READ_RPC={creator_me:1,watching_now:1,search_songs:1,chart_songs:1,creator_analytics:1,creator_content:1,creator_feedback:1,content_engagement:1,my_replies:1,creator_public:1,my_support:1,get_upload_defaults:1};
 function uid(){try{return localStorage.getItem('ss-uid')||'anon'}catch(_){return'anon'}}
 function slow(){var c=navigator.connection||{};return !!c.saveData||/^(slow-)?2g$/.test(c.effectiveType||'')}
 function json(st,b){return new Response(st===204?null:b,{status:st,headers:{'content-type':'application/json'}})}
@@ -995,7 +995,7 @@ function explain(err){
  if(/do not match an account|too many attempts|valid phone|choose a new password|enter your username/i.test(String(err&&err.message||'')))return apiError(String(err.message).replace(/\.?$/,'.'),400);
  const m=String(err&&err.message||''),c=String(err&&(err.code||err.error_code)||'');
  if(/failed to fetch|networkerror|load failed|network request failed/i.test(m))return apiError('Cannot reach the server. Check your connection.');
- if(c==='invalid_credentials'||/invalid login credentials/i.test(m))return apiError('Incorrect email or password.',400);
+ if(c==='invalid_credentials'||/invalid login credentials/i.test(m))return apiError('Incorrect email/username or password.',400);
  if(c==='user_already_exists'||/already registered/i.test(m))return apiError('An account with this email already exists. Sign in instead.',409);
  if(c==='weak_password'||/password/i.test(m)&&/(least|weak|short)/i.test(m))return apiError('Choose a stronger password of at least 8 characters.',400);
  if(/rate limit|too many/i.test(m)||/over_.*rate_limit/.test(c))return apiError('Too many attempts. Wait a minute and try again.',429);
@@ -1152,10 +1152,10 @@ async function route(method,path,body){
   if(p==='/content/links'){
    const u=await needUser(),cr=await myCreator(u,'id,name,location');
    if(!cr)throw apiError('Create a creator account before you add a link.');
-   if(body.kind!=='live'&&body.kind!=='video')throw apiError('Choose whether this link is a live stream or a video.');
+   if(!['live','video','song','message'].includes(body.kind))throw apiError('Choose what this link is: a song, message, video or live stream.');
    let tPath=null,tUrl=null;
    try{const cv=body.cover;if(cv&&cv.size&&/^image\//.test(cv.type)){const tb=await wideBlob(cv,1280);if(tb){tPath=u.id+'/'+rid()+'-thumb.jpg';const tu=await sb.storage.from(BUCKET).upload(tPath,tb,{contentType:'image/jpeg',cacheControl:'31536000',upsert:false});if(tu.error){tPath=null}else tUrl=sb.storage.from(BUCKET).getPublicUrl(tPath).data.publicUrl}}}catch(_){tPath=null;tUrl=null}
-   const ins=await sb.from('content').insert({creator_id:cr.id,kind:body.kind,title:String(body.title||'').trim(),artist_name:String(body.channel||'').trim()||cr.name,media_url:String(body.url||'').trim(),thumbnail_url:tUrl,meta:body.kind==='live'?(cr.location||'Live now'):null});
+   const who=String(body.channel||'').trim()||cr.name,ins=await sb.from('content').insert({creator_id:cr.id,kind:body.kind,title:String(body.title||'').trim(),artist_name:who,speaker:body.kind==='message'?who:null,church_name:body.kind==='message'?cr.name:null,category:body.kind==='message'?'Sermon':null,genre:body.kind==='song'?(String(body.genre||'').trim()||null):null,album:body.kind==='song'?(String(body.album||'').trim()||null):null,description:String(body.description||'').trim(),media_url:String(body.url||'').trim(),thumbnail_url:tUrl,meta:body.kind==='live'?(cr.location||'Live now'):null,permission_confirmed:body.permission==='on'||body.permission===true});
    if(ins.error){if(tPath)await sb.storage.from(BUCKET).remove([tPath]);const em=String(ins.error.message||'');if(/content_media_url_check/.test(em))throw apiError('That link could not be saved. Paste only the link, starting with https://');if(/row-level security/i.test(em))throw apiError('Your creator account is not approved to post yet. Please contact the ShalomStream team.',403);throw ins.error}
    return{ok:true};
   }
@@ -1382,7 +1382,7 @@ function signupHtml(){
   <div class="au-field"><label for="au-desc">About you</label><textarea id="au-desc" name="description" rows="3" class="au-area" placeholder="A few words about your ministry or music"></textarea></div>`;
  const perm=`<label class="check au-check"><input type="checkbox" name="permission" required><span>I will only publish content I own or have permission to share.</span></label>`;
  const side=`<aside class="au-side"><div class="au-logo"></div><h2><span class="w1">Publish.</span> <span class="w2">Reach.</span> <span class="w3">Be</span> <span class="w4">heard.</span></h2><div class="au-brand"><span class="b1">Shalom</span><span class="b2">Stream</span><span class="b3">Studio</span></div><p>Your creator space on ShalomStream is where music, messages and streams are published, and where you see who is listening.</p><ul><li>${ic(AUI.up,18)}<span>Publish songs, sermons and videos</span></li><li>${ic(AUI.music,18)}<span>Share live streams and video links</span></li><li>${ic(AUI.chart,18)}<span>Track plays, views, likes and followers</span></li></ul></aside>`;
- if(user&&user.listener){return ''}
+ if(user&&user.listener){return `<div class="au-wrap">${side}<div class="au-card"><h3>This is a listener account</h3><p class="au-sub">You are signed in as <strong>${e(user.name)}</strong>, a listener account. ShalomStream Studio is for creators. Sign out, then sign in with your creator account or create a new one.</p><button class="gold-btn au-submit" type="button" onclick="signOut()">Sign out</button></div></div>`}
  if(user){return `<div class="au-wrap">${side}<div class="au-card"><h3>Set up your creator profile</h3><p class="au-sub">One last step before you can publish content.</p>
   <form id="cform" novalidate class="au-form">${profile}${perm}<div class="form-error" id="cerr" role="alert"></div><button class="gold-btn au-submit" type="submit" id="csub">Create creator profile</button></form></div></div>`}
  return `<div class="au-wrap">${side}<div class="au-card">
@@ -1414,7 +1414,8 @@ function bindSignup(){
   try{const fd=Object.fromEntries(new FormData(lf)),rm=!!fd.remember;delete fd.remember;const r=await api.post('/auth/login',fd);rememberSet(rm,fd.email);setUser(r.user);toast('Signed in');try{loadAll()}catch(_){}await loadCreator()}
   catch(err){$('lerr').textContent=err.message;$('lsub').disabled=false;$('lsub').textContent='Sign in'}
  });
- $('cform').addEventListener('submit',async ev=>{
+ const cf=$('cform');if(!cf)return;
+ cf.addEventListener('submit',async ev=>{
   ev.preventDefault();const f=ev.target;if(!f.checkValidity()){f.reportValidity();return}
   $('cerr').textContent='';$('csub').disabled=true;$('csub').textContent='Please wait…';
   const label=user?'Create creator profile':'Create creator account';
@@ -1527,8 +1528,8 @@ function upEdit(on){$('upSaved').hidden=on;$('upFields').hidden=!on}
 const DOTS_V='<circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>';
 /* ===== POST FLOWS: music, message, video (file or link) + success screen ===== */
 const PK={
- music:{title:'Upload music',text:'Songs, albums and hymns. Choose an audio file and publish it to your audience.',accept:'audio/*',fileL:'Audio file',fileHint:'MP3, M4A, WAV, AAC or OGG, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir'],artL:'Artist or ministry',want:'audio',noun:'song'},
- message:{title:'Upload a message',text:'Sermons, teachings and testimonies. Upload an audio or video recording.',accept:'audio/*,video/*',fileL:'Audio or video file',fileHint:'MP3, M4A, WAV, MP4 or WebM, up to 50 MB.',cats:null,artL:'Speaker',want:'any',noun:'message'},
+ music:{title:'Post music',text:'Songs, albums and hymns. Pick an audio file from your phone, or paste a link.',accept:'audio/*',fileL:'Audio file',fileHint:'MP3, M4A, WAV, AAC or OGG, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir'],artL:'Artist or ministry',want:'audio',noun:'song'},
+ message:{title:'Post a message',text:'Sermons, teachings and testimonies. Paste the link to your message. Listeners open it straight on ShalomStream.',artL:'Speaker',noun:'message',linkOnly:true},
  video:{title:'Post a video',text:'Upload a video file, or paste a video link.',accept:'video/*',fileL:'Video file',fileHint:'MP4, WebM, MOV or 3GP, up to 50 MB.',cats:['Worship','Gospel','Hymns','Choir','Sermon'],artL:'Church or ministry',want:'video',noun:'video'},
  live:{title:'Post a live stream',text:'Paste the link to your live stream. Listeners open it straight on ShalomStream.',noun:'live stream',linkOnly:true}
 };
@@ -1540,19 +1541,20 @@ function ppSwitch(kind,mode){
 }
 async function openPost(kind,mode,keep){if(!canPost()){toast('Publishing opens once the admin approves your registration.');return}
  if(!creator){showAuth('login');return}
- const K=PK[kind];if(!K)return;mode=K.linkOnly?'link':(kind==='video'?(mode||'file'):'file');keep=keep||{};
+ const K=PK[kind];if(!K)return;mode=K.linkOnly?'link':((kind==='video'||kind==='music')?(mode||'file'):'file');keep=keep||{};
  if(ppDefaults===null){try{ppDefaults=await api.get('/creators/me/defaults')||{}}catch(_){ppDefaults={}}}
  const d=ppDefaults||{},isMusic=kind==='music',isLink=mode==='link';
  const opt=(A,v)=>A.map(x=>`<option value="${e(x)}"${x===v?' selected':''}>${e(x||'No genre')}</option>`).join('');
  const GEN=['','Worship','Praise','Gospel','Hymns','Choir','Contemporary','Afro gospel','Instrumental','Kids'];
  const albums=isMusic?[...new Set(songs.filter(s=>String(s.creatorId)===String(creator.id)&&s.album).map(s=>s.album).concat(d.album?[d.album]:[]))]:[];
  const seg=`<div class="seg pp-seg" role="group" aria-label="How to post"><button type="button" class="seg-btn${isLink?'':' active'}" onclick="ppSwitch('${kind}','file')">Upload a file</button><button type="button" class="seg-btn${isLink?' active':''}" onclick="ppSwitch('${kind}','link')">Paste a link</button></div>`;
- const segHtml=kind==='video'?seg:'';
+ const segHtml=(kind==='video'||kind==='music')?seg:'';
  let body;
  if(isLink){
-  body=`<div class="field"><label>Link</label><input name="url" type="text" required inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://youtube.com/watch?v=…"><small class="gate-hint">YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch, Google Drive or a direct video file link. ${kind==='live'?'It opens as a live stream on ShalomStream.':'It plays as a video on ShalomStream.'}</small></div>
+  body=`<div class="field"><label>Link</label><input name="url" type="text" required inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://youtube.com/watch?v=…"><small class="gate-hint">YouTube, Facebook, Vimeo, Instagram, TikTok, Twitch, Google Drive or a direct ${isMusic||kind==='message'?'audio or video':'video'} file link. ${kind==='live'?'It opens as a live stream on ShalomStream.':isMusic?'It plays as a song on ShalomStream.':kind==='message'?'It plays as a message on ShalomStream.':'It plays as a video on ShalomStream.'}</small></div>
 <div class="field"><label>Title</label><input name="title" required maxlength="160" value="${e(keep.title||'')}"></div>
-<div class="field"><label>Church, ministry or artist</label><input name="channel" maxlength="120" value="${e(d.artist||creator.name)}"></div>
+<div class="field"><label>${isMusic?K.artL:kind==='message'?'Speaker':'Church, ministry or artist'}</label><input name="channel" maxlength="120" value="${e(d.artist||creator.name)}"></div>
+${isMusic?`<div class="field"><label>Genre <em>(optional)</em></label><select name="genre">${opt(GEN,d.genre||'')}</select></div><div class="field"><label>Album or playlist <em>(optional)</em></label><input name="album" list="albList" value="${e(d.album||'')}" maxlength="120" placeholder="Pick one you have or type a new name"><datalist id="albList">${albums.map(a=>`<option value="${e(a)}">`).join('')}</datalist></div>`:''}
 ${coverField('link')}`;
  }else{
   body=`<div class="field"><label>${K.fileL}</label><input name="file" type="file" required accept="${K.accept}" onchange="ppPick(this,'${kind}')"><small class="gate-hint">${K.fileHint}</small><div id="ppPrev" class="pp-prev" hidden></div></div>
@@ -1588,10 +1590,10 @@ async function ppSubmit(kind,isLink){
   if(isLink){
    const d=Object.fromEntries(fd),cvf=fd.get('cover');
    if(cvf&&cvf.size>15*1024*1024)throw new Error('Choose a cover image under 15 MB.');
-   d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.title=title;d.kind=kind==='live'?'live':'video';
+   d.cover=await pickedCover(fd,true,1280,720);delete d.coverPreset;d.title=title;d.kind=kind==='live'?'live':kind==='music'?'song':kind==='message'?'message':'video';
    const link=cleanLink(d.url),x=link&&parseUrl(link);
    if(!x)throw new Error('We could not find a link in what you pasted. Paste only the link, starting with https://');
-   if(!(toEmbed(link)||LINK_HOSTS.test(x.hostname)))throw new Error('Links from '+bareHost(x)+' are not supported yet. Use a YouTube, Facebook, Instagram, TikTok, Vimeo, Twitch or Google Drive link, or a direct video file link.');
+   if(!(toEmbed(link)||LINK_HOSTS.test(x.hostname)||((kind==='music'||kind==='message')&&/\.(mp3|m4a|wav|aac|ogg|oga|opus|flac)$/i.test(x.pathname))))throw new Error('Links from '+bareHost(x)+' are not supported yet. Use a YouTube, Facebook, Instagram, TikTok, Vimeo, Twitch or Google Drive link, or a direct '+(kind==='music'||kind==='message'?'audio or video':'video')+' file link.');
    d.url=link;
    await api.post('/content/links',d);
   }else{
@@ -1682,12 +1684,12 @@ addEventListener('online',()=>setTimeout(()=>warmOffline(),4000));
 /* ===== CREATOR STUDIO ===== */
 let tab='overview';try{const t0=localStorage.getItem('ss-tab');if(t0)tab=t0}catch(_){}let cQ='',cType='all',cSort='plays';
 const TABS=[['overview','Overview','<path d="M3 12l9-8 9 8M5 10v10h14V10"/>'],['content','Content',NOTE],['post','Post','<path d="M12 5v14M5 12h14"/>'],['audience','Audience','<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>'],['analytics','Analytics','<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>'],['profile','Profile','<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'],['settings','Settings','<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>']];
-const PER=[['7d','7 days'],['30d','30 days'],['90d','90 days']],MET=[['views','Views'],['plays','Plays'],['likes','Likes'],['followers','New followers']];
+const PER=[['7d','7 days'],['30d','30 days'],['90d','90 days']],MET=[['views','Watches'],['plays','Plays'],['likes','Likes'],['followers','New followers']];
 const PUBLIC_SITE='https://transapple.github.io/Shalom-Stream/';/* the real listener site: share links open creators here */
 const SHARE_BASE='';/* PASTE your deployed share-worker URL here (no trailing slash), e.g. https://shalom-share.yourname.workers.dev. Empty = old #links (no rich preview) */
 const pubUrl=()=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/u/'+encodeURIComponent(creator.id):PUBLIC_SITE.replace(/\/?$/,'/')+'#creator='+creator.id;/* https link: opens the app if installed, otherwise the browser */
 const slugOf=n=>String(n||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9._]+/g,'-').replace(/^-+|-+$/g,'')||'creator';
-const contentUrl=id=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/c/'+encodeURIComponent(id):PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
+const contentUrl=id=>SHARE_BASE?SHARE_BASE.replace(/\/+$/,'')+'/c/'+encodeURIComponent(id):PUBLIC_SITE.replace(/\/?$/,'/')+'#/'+encodeURIComponent(slugOf((creator&&creator.username)||(user&&user.username)||(creator&&creator.name)))+'/'+encodeURIComponent(id);/* creator username, then the content id */
 const kindOf=()=>(CTYPES.find(t=>t[0]===creator.type)||[0,'Creator'])[1];
 const canPost=()=>!!creator&&creator.status==='approved';
 const stLabel=()=>creator.status==='approved'?'Approved':creator.status==='rejected'?'Not approved':'Awaiting approval';
@@ -1710,7 +1712,7 @@ function lineChart(m){
 function stats(){
  const d=cData||{},T=d.totals||{},C=d.changes||{},F=cFeed,cm=F?F.comments:0,inter=(T.views||0)+(T.plays||0),er=inter?Math.round(((T.likes||0)+cm)/inter*1000)/10:0;
  const s=([k,l])=>`<div class="stat"><span>${l}</span><strong>${fmtN(T[k]||0)}</strong>${C[k]==null?'':pct(C[k])}</div>`;
- return `<div class="stats">${[['views','Views'],['plays','Plays'],['likes','Likes'],['followers','Followers']].map(s).join('')}<div class="stat"><span>Comments</span><strong>${F?fmtN(cm):'–'}</strong></div><div class="stat"><span>Engagement</span><strong>${er}%</strong><small class="stat-note">likes + comments per view or play</small></div><div class="stat live"><span><i class="pulse" aria-hidden="true"></i>Watching now</span><strong>${fmtN(T.watching||0)}</strong></div><div class="stat"><span>Published</span><strong>${cContent.length}</strong></div></div>`;
+ return `<div class="stats">${[['views','Watches'],['plays','Plays'],['likes','Likes'],['followers','Followers']].map(s).join('')}<div class="stat"><span>Comments</span><strong>${F?fmtN(cm):'–'}</strong></div><div class="stat"><span>Engagement</span><strong>${er}%</strong><small class="stat-note">likes + comments per view or play</small></div><div class="stat live"><span><i class="pulse" aria-hidden="true"></i>Watching now</span><strong>${fmtN(T.watching||0)}</strong></div><div class="stat"><span>Published</span><strong>${cContent.length}</strong></div></div>`;
 }
 function lists(){
  const boom=cContent.filter(c=>c.growth>=15).sort((a,b)=>b.growth-a.growth).slice(0,20),top=[...cContent].sort((a,b)=>b.plays-a.plays).slice(0,20),max=top[0]?Math.max(top[0].plays,1):1;
@@ -1740,7 +1742,7 @@ function vContent(){
 }
 function vPost(){if(!canPost())return title('Post','Publishing opens once your registration is approved.')+stBanner();
  const rec=cContent.slice(0,6);
- return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Post audio','Songs, albums and hymns from an audio file',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Post a message','Sermons, teachings and testimonies',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Post a video','A video file or a video link',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Post a live stream','Link only: YouTube, Facebook, Twitch and more',"openPost('live')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
+ return title('Post','Publish new content and share streams with your audience.')+`<div class="cs-tiles">${tile(NOTE,'Post music','Songs and hymns: pick a file or paste a link',"openPost('music')")}${tile('<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3zM19 11a7 7 0 0 1-14 0M12 18v4"/>','Post a message','Paste a link to your sermon or teaching',"openPost('message')")}${tile('<rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 10l4-2v8l-4-2"/>','Post a video','A video file or a video link',"openPost('video')")}${tile('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>','Post a live stream','Link only: YouTube, Facebook, Twitch and more',"openPost('live')")}</div><div class="cs-grid2">${card('Before you publish',kv('Rights','Only publish what you own or have permission to share.')+kv('Goes live','Everything you publish is visible right away.')+kv('Covers','Add a cover so your content stands out. You can change it later.'))}${card('In your library',rec.length?rec.map(c=>`<div class="c-row"><div class="c-t"><strong>${e(c.title)}</strong><span>${e(c.type)}</span></div><span>${fmtN(c.plays)} plays</span></div>`).join(''):'<p class="c-empty">Nothing published yet.</p>')}</div>`;
 }
 function vAudience(){
  const T=(cData&&cData.totals)||{},C=(cData&&cData.changes)||{};
@@ -1770,8 +1772,8 @@ function renderCreator(){
 }
 function saveCSV(name,rows){const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"',b=new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
 function exportCSV(w){
- if(w==='content')saveCSV('content.csv',[['Title','Type','Status','Plays','Views','Likes','Watching','Growth %']].concat(cContent.map(c=>[c.title,c.type,c.status,c.plays,c.views,c.likes||0,c.watching||0,c.growth||0])));
- else saveCSV('daily-'+cPeriod+'.csv',[['Date','Views','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
+ if(w==='content')saveCSV('content.csv',[['Title','Type','Status','Plays','Watches','Likes','Watching','Growth %']].concat(cContent.map(c=>[c.title,c.type,c.status,c.plays,c.views,c.likes||0,c.watching||0,c.growth||0])));
+ else saveCSV('daily-'+cPeriod+'.csv',[['Date','Watches','Plays','Likes','New followers']].concat(((cData&&cData.series)||[]).map(s=>[s.date,s.views||0,s.plays||0,s.likes||0,s.followers||0])));
 }
 function copyPub(){copyText(pubUrl(),'Profile link copied')}
 async function copyText(u,msg){try{await navigator.clipboard.writeText(u);toast(msg||'Link copied')}catch(_){const t=document.createElement('textarea');t.value=u;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();try{ssExec();toast(msg||'Link copied')}catch(__){toast('Could not copy the link')}t.remove()}}
